@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
-	"server/api"
+	"server/internal/api"
 	"server/handlers"
 	"server/models"
 	"sync"
@@ -13,8 +13,15 @@ import (
 func main() {
 	mu := &sync.RWMutex{}
 	var records models.Records
+	loc, err := time.LoadLocation("Asia/Kolkata")
+	if err != nil {
+		log.Fatalf("Failed to load timezone: %v", err)
+	}
 
-	http.HandleFunc("/api/data", handlers.HandlePost(&records, mu))
+	now := time.Now().In(loc)
+	endTime := time.Date(now.Year(), now.Month(), now.Day(), 1, 40, 0, 0, loc)
+
+	http.HandleFunc("/api/data", handlers.HandlePost(&records, loc, endTime, mu))
 
 	go func() {
 		log.Println("Starting server on :4300")
@@ -23,15 +30,7 @@ func main() {
 		}
 	}()
 
-	// Load timezone with error handling
-	loc, err := time.LoadLocation("Asia/Kolkata")
-	if err != nil {
-		log.Fatalf("Failed to load timezone: %v", err)
-	}
-
-	now := time.Now().In(loc)
-	startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 30, 0, loc)
-	endTime := time.Date(now.Year(), now.Month(), now.Day(), 21, 15, 0, 0, loc)
+	startTime := time.Date(now.Year(), now.Month(), now.Day(), 00, 01, 0, 0, loc)
 
 	if now.Before(startTime) {
 		wait := time.Until(startTime)
@@ -60,8 +59,14 @@ func main() {
 		}
 
 		mu.Lock()
-
-		records = wantedRecords
+		
+        // rest fields are static, so we can append directly
+		records = models.Records{
+			TimeStamp:      wantedRecords.TimeStamp,
+			UnderlyingValue: wantedRecords.UnderlyingValue,
+			Data:           append(records.Data, wantedRecords.Data...),
+			ExpiryDates:    wantedRecords.ExpiryDates,
+		}
 
 		mu.Unlock()
 

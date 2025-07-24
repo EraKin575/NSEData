@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"server/models"
@@ -107,11 +108,13 @@ func FetchData() (models.Records, error) {
 		}
 	}
 
+	log.Printf("timestamp: %s, underlying value: %f", chain.Records.TimeStamp, chain.Records.UnderlyingValue)
+
 	result := append(expiryOneResult, expiryTwoResult...)
 	return models.Records{
 		ExpiryDates:     []string{firstExpiry, secondExpiry},
 		Data:            result,
-		TimeStamp:       time.Now().Format(time.RFC3339),
+		TimeStamp:       chain.Records.TimeStamp,
 		UnderlyingValue: chain.Records.UnderlyingValue,
 	}, nil
 }
