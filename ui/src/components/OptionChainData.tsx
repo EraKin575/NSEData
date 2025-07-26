@@ -1,111 +1,221 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Table, Card, Spin, Alert, InputNumber, Select, Button } from "antd";
+import { Color } from "antd/es/color-picker";
 
 const { Option } = Select;
 
-// Define columns with CE (call) and PE (put) side by side for each attribute
 const columns = [
-  {
-    title: "Strike Price",
-    dataIndex: "strikePrice",
-    key: "strikePrice",
-    fixed: "left",
-    render: (v) => v?.toLocaleString(),
-    sorter: (a, b) => a.strikePrice - b.strikePrice,
-    width: 100,
+ {
+    title: "Timestamp",
+    dataIndex: "timestamp",
+    key: "timestamp",
+    width: 130,
+    align: "center",
+    sorter: (a, b) => {
+      const dateA = new Date(a.timestamp);
+      const dateB = new Date(b.timestamp);
+      return dateA.getTime() - dateB.getTime();
+    },
   },
   {
     title: "Expiry Date",
     dataIndex: "expiryDate",
     key: "expiryDate",
     sorter: (a, b) => a.expiryDate.localeCompare(b.expiryDate),
-    width: 120,
+    width: 100,
+    align: "center",
   },
   {
-    title: "CE OI",
+    title: "COI",
     dataIndex: "ceOpenInterest",
     key: "ceOpenInterest",
-    render: (v) => v !== undefined ? v.toLocaleString() : "-",
+    render: (v: { toLocaleString: () => any; } | undefined) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a: { ceOpenInterest: any; }, b: { ceOpenInterest: any; }) => (a.ceOpenInterest || 0) - (b.ceOpenInterest || 0),
+    align: "right",
     width: 80,
   },
   {
-    title: "CE Chg OI",
+    title: "CCOI",
     dataIndex: "ceChangeInOI",
     key: "ceChangeInOI",
-    render: (v) => v !== undefined ? v.toLocaleString() : "-",
-    width: 90,
+    render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a, b) => (a.ceChangeInOI || 0) - (b.ceChangeInOI || 0),
+    width: 80,
+    align: "right",
   },
   {
-    title: "CE % Chg OI",
+    title: "CCOI%",
     dataIndex: "cePChangeInOI",
     key: "cePChangeInOI",
-    render: (v) => v !== undefined ? v.toFixed(2) + "%" : "-",
-    width: 100,
+    render: (v) => (v !== undefined ? v.toFixed(2) + "%" : "-"),
+    sorter: (a, b) => (a.cePChangeInOI || 0) - (b.cePChangeInOI || 0),
+    width: 80,
+    align: "right",
   },
   {
-    title: "CE Vol",
+    title: "CVol",
     dataIndex: "ceVolume",
     key: "ceVolume",
-    render: (v) => v !== undefined ? v.toLocaleString() : "-",
-    width: 90,
+    render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a, b) => (a.ceVolume || 0) - (b.ceVolume || 0),
+    width: 80,
+    align: "right",
   },
   {
-    title: "CE IV",
+    title: "CIV",
     dataIndex: "ceIV",
     key: "ceIV",
-    render: (v) => v !== undefined ? v.toFixed(2) : "-",
+    render: (v) => (v !== undefined ? v.toFixed(2) : "-"),
+    sorter: (a, b) => (a.ceIV || 0) - (b.ceIV || 0),
     width: 70,
+    align: "right",
   },
   {
     title: "CE LTP",
     dataIndex: "ceLTP",
     key: "ceLTP",
-    render: (v) => v !== undefined ? v.toFixed(2) : "-",
+    render: (v) => (v !== undefined ? v.toFixed(2) : "-"),
+    sorter: (a, b) => (a.ceLTP || 0) - (b.ceLTP || 0),
     width: 80,
+    align: "right",
+  },
+  {
+    title: "Spot",
+    dataIndex: "underlyingValue",
+    key: "underlyingValue",
+    render: (v) => v ? v.toFixed(2) : "-",
+    sorter: (a, b) => (a.underlyingValue || 0) - (b.underlyingValue || 0),
+    width: 80,
+    align: "center",
+  },
+  {
+    title: <span>Strike Price</span>,
+    dataIndex: "strikePrice",
+    key: "strikePrice",
+    render: (v) => <div className="bg-amber-200 p-0"><strong className="text-amber-600 p-0.5">{v?.toLocaleString()}</strong></div>,
+    sorter: (a, b) => (a.strikePrice || 0) - (b.strikePrice || 0),
+    width: 100,
+    align: "center",
   },
   {
     title: "PE LTP",
     dataIndex: "peLTP",
     key: "peLTP",
-    render: (v) => v !== undefined ? v.toFixed(2) : "-",
+    render: (v) => (v !== undefined ? v.toFixed(2) : "-"),
+    sorter: (a, b) => (a.peLTP || 0) - (b.peLTP || 0),
     width: 80,
+    align: "right",
   },
   {
     title: "PE IV",
     dataIndex: "peIV",
     key: "peIV",
-    render: (v) => v !== undefined ? v.toFixed(2) : "-",
+    render: (v) => (v !== undefined ? v.toFixed(2) : "-"),
+    sorter: (a, b) => (a.peIV || 0) - (b.peIV || 0),
     width: 70,
+    align: "right",
   },
   {
     title: "PE Vol",
     dataIndex: "peVolume",
     key: "peVolume",
-    render: (v) => v !== undefined ? v.toLocaleString() : "-",
-    width: 90,
+    render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a: { peVolume: any; }, b: { peVolume: any; }) => (a.peVolume || 0) - (b.peVolume || 0),
+    width: 80,
+    align: "right",
   },
   {
-    title: "PE % Chg OI",
+    title: "PCOI%",
     dataIndex: "pePChangeInOI",
     key: "pePChangeInOI",
-    render: (v) => v !== undefined ? v.toFixed(2) + "%" : "-",
-    width: 100,
+    render: (v) => (v !== undefined ? v.toFixed(2) + "%" : "-"),
+    sorter: (a, b) => (a.pePChangeInOI || 0) - (b.pePChangeInOI || 0),
+    width: 80,
+    align: "right",
   },
   {
-    title: "PE Chg OI",
+    title: "PCOI",
     dataIndex: "peChangeInOI",
     key: "peChangeInOI",
-    render: (v) => v !== undefined ? v.toLocaleString() : "-",
-    width: 90,
+    render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a, b) => (a.peChangeInOI || 0) - (b.peChangeInOI || 0),
+    width: 80,
+    align: "right",
   },
   {
-    title: "PE OI",
+    title: "POI",
     dataIndex: "peOpenInterest",
     key: "peOpenInterest",
-    render: (v) => v !== undefined ? v.toLocaleString() : "-",
+    render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a, b) => (a.peOpenInterest || 0) - (b.peOpenInterest || 0),
     width: 80,
+    align: "right",
   },
+  {
+    title: "IntraDay PCR",
+    dataIndex: "intradayPCR",
+    key: "intradayPCR",
+    render: (_, record) => {
+      const pePChange = record?.pePChangeInOI || 0;
+      const cePChange = record?.cePChangeInOI || 0;
+      
+      if (cePChange === 0) return "-";
+      
+      const pcr = pePChange / cePChange;
+      return isFinite(pcr) ? pcr.toFixed(2) : "-";
+    },
+    sorter: (a, b) => {
+      const pePChangeA = a.pePChangeInOI || 0;
+      const cePChangeA = a.cePChangeInOI || 0;
+      const pePChangeB = b.pePChangeInOI || 0;
+      const cePChangeB = b.cePChangeInOI || 0;
+      
+      // Handle division by zero
+      const pcrA = cePChangeA === 0 ? 0 : pePChangeA / cePChangeA;
+      const pcrB = cePChangeB === 0 ? 0 : pePChangeB / cePChangeB;
+      
+      // Handle infinite values
+      const finalA = isFinite(pcrA) ? pcrA : 0;
+      const finalB = isFinite(pcrB) ? pcrB : 0;
+      
+      return finalA - finalB;
+    },
+    width: 100,
+    align: "right",
+  },
+  {
+    title: "PCR",
+    dataIndex: "pcr",
+    key: "pcr",
+    render: (_, record) => {
+      const peOI = record?.peOpenInterest || 0;
+      const ceOI = record?.ceOpenInterest || 0;
+      
+      if (ceOI === 0) return "-";
+      
+      const pcr = peOI / ceOI;
+      return isFinite(pcr) ? pcr.toFixed(2) : "-";
+    },
+    sorter: (a, b) => {
+      const peOIA = a.peOpenInterest || 0;
+      const ceOIA = a.ceOpenInterest || 0;
+      const peOIB = b.peOpenInterest || 0;
+      const ceOIB = b.ceOpenInterest || 0;
+      
+      // Handle division by zero
+      const pcrA = ceOIA === 0 ? 0 : peOIA / ceOIA;
+      const pcrB = ceOIB === 0 ? 0 : peOIB / ceOIB;
+      
+      // Handle infinite values
+      const finalA = isFinite(pcrA) ? pcrA : 0;
+      const finalB = isFinite(pcrB) ? pcrB : 0;
+      
+      return finalA - finalB;
+    },
+    width: 80,
+    align: "right",
+  }
 ];
 
 function OptionChainTable() {
@@ -121,64 +231,83 @@ function OptionChainTable() {
   const [selectedExpiry, setSelectedExpiry] = useState(undefined);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 180000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line
+    const source = new EventSource("http://localhost:4300/api/data");
+    const timeout = setTimeout(() => {
+      setError("No data received from SSE server.");
+      setLoading(false);
+      source.close();
+    }, 5000);
+
+    source.onmessage = (event) => {
+      try {
+        clearTimeout(timeout);
+        const res = JSON.parse(event.data);
+        const map = {};
+        const expirySet = new Set();
+
+        res.data.forEach((item) => {
+          const key = item.strikePrice + "-" + item.expiryDate;
+          expirySet.add(item.expiryDate);
+          if (!map[key]) {
+            map[key] = {
+              key,
+              strikePrice: item.strikePrice,
+              expiryDate: item.expiryDate,
+              timestamp: res.timestamp,
+              underlyingValue: res.underlyingValue,
+            };
+          }
+          if (item.CE) {
+            map[key].ceOpenInterest = item.CE.openInterest;
+            map[key].ceChangeInOI = item.CE.changeinOpenInterest;
+            map[key].cePChangeInOI = item.CE.pchangeinOpenInterest;
+            map[key].ceVolume = item.CE.totalTradedVolume;
+            map[key].ceIV = item.CE.impliedVolatility;
+            map[key].ceLTP = item.CE.lastPrice;
+          }
+          if (item.PE) {
+            map[key].peOpenInterest = item.PE.openInterest;
+            map[key].peChangeInOI = item.PE.changeinOpenInterest;
+            map[key].pePChangeInOI = item.PE.pchangeinOpenInterest;
+            map[key].peVolume = item.PE.totalTradedVolume;
+            map[key].peIV = item.PE.impliedVolatility;
+            map[key].peLTP = item.PE.lastPrice;
+          }
+        });
+
+        const allRecords = Object.values(map);
+        setRawRecords(allRecords);
+        setExpiryDates([...expirySet].sort());
+        setMeta({
+          timestamp: res.timestamp,
+          underlyingValue: res.underlyingValue,
+        });
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to parse SSE message", err);
+        setError("Failed to parse SSE data.");
+        setLoading(false);
+      }
+    };
+
+    source.onerror = () => {
+      setError("SSE connection error.");
+      setLoading(false);
+      source.close();
+    };
+
+    return () => {
+      clearTimeout(timeout);
+      source.close();
+    };
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await axios.post("http://localhost:4300/api/data", {}); // adjust endpoint if needed
-      // Map by strikePrice + expiryDate
-      const map = {};
-      const expirySet = new Set();
-      res.data.data.forEach((item) => {
-        const key = item.strikePrice + "-" + item.expiryDate;
-        expirySet.add(item.expiryDate);
-        if (!map[key]) {
-          map[key] = {
-            key,
-            strikePrice: item.strikePrice,
-            expiryDate: item.expiryDate,
-          };
-        }
-        if (item.CE) {
-          map[key].ceOpenInterest = item.CE.openInterest;
-          map[key].ceChangeInOI = item.CE.changeinOpenInterest;
-          map[key].cePChangeInOI = item.CE.pchangeinOpenInterest;
-          map[key].ceVolume = item.CE.totalTradedVolume;
-          map[key].ceIV = item.CE.impliedVolatility;
-          map[key].ceLTP = item.CE.lastPrice;
-        }
-        if (item.PE) {
-          map[key].peOpenInterest = item.PE.openInterest;
-          map[key].peChangeInOI = item.PE.changeinOpenInterest;
-          map[key].pePChangeInOI = item.PE.pchangeinOpenInterest;
-          map[key].peVolume = item.PE.totalTradedVolume;
-          map[key].peIV = item.PE.impliedVolatility;
-          map[key].peLTP = item.PE.lastPrice;
-        }
-      });
-      const allRecords = Object.values(map);
-      setRawRecords(prev => [...prev, ...allRecords]);
-      setExpiryDates([...expirySet].sort());
-      setMeta({
-        timestamp: res.data.timestamp,
-        underlyingValue: res.data.underlyingValue,
-      });
-      setLoading(false);
-      // Optionally auto-select first expiry
-      if (!selectedExpiry && expirySet.size > 0) setSelectedExpiry([...expirySet][0]);
-    } catch (err) {
-      setError("Failed to fetch data from backend.");
-      setLoading(false);
+  useEffect(() => {
+    if (!selectedExpiry && expiryDates.length) {
+      setSelectedExpiry(expiryDates[0]);
     }
-  };
+  }, [expiryDates]);
 
-  // Filtering logic
   useEffect(() => {
     let filtered = rawRecords;
     if (selectedExpiry) {
@@ -194,7 +323,7 @@ function OptionChainTable() {
   }, [rawRecords, minStrike, maxStrike, selectedExpiry]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4">
+    <div className="w-screen h-screen p-4 overflow-auto bg-white">
       <Card
         className="mb-4 shadow-lg rounded-2xl"
         title={
@@ -211,8 +340,8 @@ function OptionChainTable() {
           </span>
         }
       >
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row items-center gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row
+         flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-600">Strike Price:</span>
             <InputNumber
@@ -232,6 +361,16 @@ function OptionChainTable() {
               onChange={setMaxStrike}
               className="!w-24"
             />
+            <Button
+              size="small"
+              onClick={() => {
+                setMinStrike(null);
+                setMaxStrike(null);
+                if (expiryDates.length) setSelectedExpiry(undefined);
+              }}
+            >
+              Reset
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-600">Expiry Date:</span>
@@ -240,10 +379,10 @@ function OptionChainTable() {
               size="small"
               placeholder="Select expiry"
               value={selectedExpiry}
-              onChange={setSelectedExpiry}
+              onChange={(value) => setSelectedExpiry(value ?? undefined)}
               className="!w-48"
               optionFilterProp="children"
-              allowClear={false}
+              allowClear
             >
               {expiryDates.map((exp) => (
                 <Option key={exp} value={exp}>
@@ -252,16 +391,6 @@ function OptionChainTable() {
               ))}
             </Select>
           </div>
-          <Button
-            size="small"
-            onClick={() => {
-              setMinStrike(null);
-              setMaxStrike(null);
-              if (expiryDates.length) setSelectedExpiry(expiryDates[0]);
-            }}
-          >
-            Reset
-          </Button>
         </div>
 
         {error && <Alert message={error} type="error" className="mb-4" />}
@@ -271,15 +400,18 @@ function OptionChainTable() {
           </div>
         ) : (
           <Table
+            pagination={{
+              pageSize: 100
+            }}
             columns={columns}
             dataSource={records}
             size="small"
-            pagination={{ pageSize: 25 }}
             scroll={{ x: "max-content" }}
             bordered
-            rowClassName="text-xs"
-            className="rounded-2xl"
+            rowClassName="text-xs text-center"
+            className="rounded-2xl min-w-[1400px]"
             sticky
+            
           />
         )}
       </Card>
