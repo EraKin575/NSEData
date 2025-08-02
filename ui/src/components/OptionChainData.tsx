@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
-import { Table, Card, Spin, Alert, InputNumber, Select, Button } from "antd";
-import { Color } from "antd/es/color-picker";
+import { Table, Card, Spin, Alert, InputNumber, Select, Button, Tabs } from "antd";
 import { Typography } from "antd";
-
+import OILineChart from "./charts";
 const { Option } = Select;
 const { Title } = Typography;
+const { TabPane } = Tabs;
 
 const columns = [
  {
@@ -32,8 +31,8 @@ const columns = [
     title: "COI",
     dataIndex: "ceOpenInterest",
     key: "ceOpenInterest",
-    render: (v: { toLocaleString: () => any; } | undefined) => (v !== undefined ? v.toLocaleString() : "-"),
-    sorter: (a: { ceOpenInterest: any; }, b: { ceOpenInterest: any; }) => (a.ceOpenInterest || 0) - (b.ceOpenInterest || 0),
+    render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
+    sorter: (a, b) => (a.ceOpenInterest || 0) - (b.ceOpenInterest || 0),
     align: "right",
     width: 80,
   },
@@ -123,7 +122,7 @@ const columns = [
     dataIndex: "peVolume",
     key: "peVolume",
     render: (v) => (v !== undefined ? v.toLocaleString() : "-"),
-    sorter: (a: { peVolume: any; }, b: { peVolume: any; }) => (a.peVolume || 0) - (b.peVolume || 0),
+    sorter: (a, b) => (a.peVolume || 0) - (b.peVolume || 0),
     width: 80,
     align: "right",
   },
@@ -173,11 +172,9 @@ const columns = [
       const pePChangeB = b.pePChangeInOI || 0;
       const cePChangeB = b.cePChangeInOI || 0;
       
-      // Handle division by zero
       const pcrA = cePChangeA === 0 ? 0 : pePChangeA / cePChangeA;
       const pcrB = cePChangeB === 0 ? 0 : pePChangeB / cePChangeB;
       
-      // Handle infinite values
       const finalA = isFinite(pcrA) ? pcrA : 0;
       const finalB = isFinite(pcrB) ? pcrB : 0;
       
@@ -205,11 +202,9 @@ const columns = [
       const peOIB = b.peOpenInterest || 0;
       const ceOIB = b.ceOpenInterest || 0;
       
-      // Handle division by zero
       const pcrA = ceOIA === 0 ? 0 : peOIA / ceOIA;
       const pcrB = ceOIB === 0 ? 0 : peOIB / ceOIB;
       
-      // Handle infinite values
       const finalA = isFinite(pcrA) ? pcrA : 0;
       const finalB = isFinite(pcrB) ? pcrB : 0;
       
@@ -319,6 +314,7 @@ function OptionChainTable() {
   const [selectedExpiry, setSelectedExpiry] = useState(undefined);
 
   const [summaryData, setSummaryData] = useState([]);
+  const [historicalData, setHistoricalData] = useState([]);
 
   useEffect(() => {
     const source = new EventSource("http://localhost:4300/api/data");
@@ -331,11 +327,25 @@ function OptionChainTable() {
     source.onmessage = (event) => {
       try {
         clearTimeout(timeout);
-        const res = JSON.parse(event.data);
+        const parsedData = JSON.parse(event.data);
+
+        if (!Array.isArray(parsedData) || parsedData.length === 0) {
+          return;
+        }
+
+        const recordToShow = parsedData[0];
+
+        // Store historical data for charts
+        setHistoricalData(prev => {
+          const newData = [...prev, recordToShow];
+          // Keep only last 100 data points to prevent memory issues
+          return newData.slice(-100);
+        });
+
         const map = {};
         const expirySet = new Set();
 
-        res.data.forEach((item) => {
+        recordToShow.data.forEach((item) => {
           const key = item.strikePrice + "-" + item.expiryDate;
           expirySet.add(item.expiryDate);
           if (!map[key]) {
@@ -343,8 +353,8 @@ function OptionChainTable() {
               key,
               strikePrice: item.strikePrice,
               expiryDate: item.expiryDate,
-              timestamp: res.timestamp,
-              underlyingValue: res.underlyingValue,
+              timestamp: recordToShow.timestamp,
+              underlyingValue: recordToShow.underlyingValue,
             };
           }
           if (item.CE) {
@@ -371,7 +381,7 @@ function OptionChainTable() {
 
         setRawRecords(allRecords);
         setExpiryDates(sortedExpiry);
-        setMeta({ timestamp: res.timestamp, underlyingValue: res.underlyingValue });
+        setMeta({ timestamp: recordToShow.timestamp, underlyingValue: recordToShow.underlyingValue });
         setSummaryData(summary);
         setLoading(false);
       } catch (err) {
@@ -431,72 +441,80 @@ function OptionChainTable() {
           </span>
         }
       >
-        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mb-4">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-600">Strike Price:</span>
-            <InputNumber min={0} placeholder="Min" size="small" value={minStrike} onChange={setMinStrike} className="!w-24" />
-            <span>-</span>
-            <InputNumber min={0} placeholder="Max" size="small" value={maxStrike} onChange={setMaxStrike} className="!w-24" />
-            <Button size="small" onClick={() => {
-              setMinStrike(null);
-              setMaxStrike(null);
-              if (expiryDates.length) setSelectedExpiry(undefined);
-            }}>
-              Reset
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-600">Expiry Date:</span>
-            <Select
-              showSearch
-              size="small"
-              placeholder="Select expiry"
-              value={selectedExpiry}
-              onChange={(value) => setSelectedExpiry(value ?? undefined)}
-              className="!w-48"
-              optionFilterProp="children"
-              allowClear
-            >
-              {expiryDates.map((exp) => (
-                <Option key={exp} value={exp}>{exp}</Option>
-              ))}
-            </Select>
-          </div>
-        </div>
+        <Tabs defaultActiveKey="table" className="w-full">
+          <TabPane tab="Option Chain Table" key="table">
+            <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-600">Strike Price:</span>
+                <InputNumber min={0} placeholder="Min" size="small" value={minStrike} onChange={setMinStrike} className="!w-24" />
+                <span>-</span>
+                <InputNumber min={0} placeholder="Max" size="small" value={maxStrike} onChange={setMaxStrike} className="!w-24" />
+                <Button size="small" onClick={() => {
+                  setMinStrike(null);
+                  setMaxStrike(null);
+                  if (expiryDates.length) setSelectedExpiry(undefined);
+                }}>
+                  Reset
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-600">Expiry Date:</span>
+                <Select
+                  showSearch
+                  size="small"
+                  placeholder="Select expiry"
+                  value={selectedExpiry}
+                  onChange={(value) => setSelectedExpiry(value ?? undefined)}
+                  className="!w-48"
+                  optionFilterProp="children"
+                  allowClear
+                >
+                  {expiryDates.map((exp) => (
+                    <Option key={exp} value={exp}>{exp}</Option>
+                  ))}
+                </Select>
+              </div>
+            </div>
 
-        {summaryData.length > 0 && (
-          <>
-            <Title level={5}>Expiry Summary</Title>
-            <Table
-              pagination={false}
-              columns={summaryColumns}
-              dataSource={summaryData}
-              size="small"
-              bordered
-              rowKey="expiryDate"
-              className="mb-6"
-            />
-          </>
-        )}
+            {summaryData.length > 0 && (
+              <>
+                <Title level={5}>Expiry Summary</Title>
+                <Table
+                  pagination={false}
+                  columns={summaryColumns}
+                  dataSource={summaryData}
+                  size="small"
+                  bordered
+                  rowKey="expiryDate"
+                  className="mb-6"
+                />
+              </>
+            )}
 
-        {error && <Alert message={error} type="error" className="mb-4" />}
-        {loading ? (
-          <div className="flex justify-center items-center min-h-[200px]">
-            <Spin size="large" />
-          </div>
-        ) : (
-          <Table
-            pagination={{ pageSize: 100 }}
-            columns={columns}
-            dataSource={records}
-            size="small"
-            scroll={{ x: "max-content" }}
-            bordered
-            rowClassName="text-xs text-center"
-            className="rounded-2xl min-w-[1400px]"
-            sticky
-          />
-        )}
+            {error && <Alert message={error} type="error" className="mb-4" />}
+            {loading ? (
+              <div className="flex justify-center items-center min-h-[200px]">
+                <Spin size="large" />
+              </div>
+            ) : (
+              <Table
+                pagination={{ pageSize: 100 }}
+                columns={columns}
+                dataSource={records}
+                size="small"
+                scroll={{ x: "max-content" }}
+                bordered
+                rowClassName="text-xs text-center"
+                className="rounded-2xl min-w-[1400px]"
+                sticky
+              />
+            )}
+          </TabPane>
+          
+          <TabPane tab="Line Charts" key="charts">
+            <OILineChart data={historicalData} />
+          </TabPane>
+        </Tabs>
       </Card>
     </div>
   );

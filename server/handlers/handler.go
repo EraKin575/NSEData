@@ -11,7 +11,7 @@ import (
 
 // HandlePost streams `data` as SSE until `endTime`.
 // Uses a mutex for safe concurrent access to `data`.
-func HandlePost(data *models.Records, loc *time.Location, endTime time.Time, mu *sync.RWMutex) http.HandlerFunc {
+func HandlePost(data *[]models.Records, loc *time.Location, endTime time.Time, mu *sync.RWMutex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Handle CORS and preflight request
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")

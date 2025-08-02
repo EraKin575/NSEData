@@ -12,7 +12,7 @@ import (
 
 func main() {
 	mu := &sync.RWMutex{}
-	var records models.Records
+	var records []models.Records
 	loc, err := time.LoadLocation("Asia/Kolkata")
 	if err != nil {
 		log.Fatalf("Failed to load timezone: %v", err)
@@ -59,14 +59,12 @@ func main() {
 		}
 
 		mu.Lock()
+
+
+		records = append(records, wantedRecords)
 		
         // rest fields are static, so we can append directly
-		records = models.Records{
-			TimeStamp:      wantedRecords.TimeStamp,
-			UnderlyingValue: wantedRecords.UnderlyingValue,
-			Data:           append(records.Data, wantedRecords.Data...),
-			ExpiryDates:    wantedRecords.ExpiryDates,
-		}
+
 
 		mu.Unlock()
 
