@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { Table, Card, Spin, Alert, InputNumber, Select, Button } from "antd";
 import { Color } from "antd/es/color-picker";
+import { Typography } from "antd";
 
 const { Option } = Select;
+const { Title } = Typography;
 
 const columns = [
  {
@@ -218,6 +220,92 @@ const columns = [
   }
 ];
 
+// Summary Table Columns
+const summaryColumns = [
+  {
+    title: "Expiry Date",
+    dataIndex: "expiryDate",
+    key: "expiryDate",
+    align: "center",
+  },
+  {
+    title: "Call OI",
+    dataIndex: "totalCEOI",
+    key: "totalCEOI",
+    render: (v) => v.toLocaleString(),
+    align: "right",
+  },
+  {
+    title: "Call CCOI",
+    dataIndex: "totalCECCOI",
+    key: "totalCECCOI",
+    render: (v) => v.toLocaleString(),
+    align: "right",
+  },
+  {
+    title: "Call Volume",
+    dataIndex: "totalCEVol",
+    key: "totalCEVol",
+    render: (v) => v.toLocaleString(),
+    align: "right",
+  },
+  {
+    title: "Put OI",
+    dataIndex: "totalPEOI",
+    key: "totalPEOI",
+    render: (v) => v.toLocaleString(),
+    align: "right",
+  },
+  {
+    title: "Put CCOI",
+    dataIndex: "totalPECCOI",
+    key: "totalPECCOI",
+    render: (v) => v.toLocaleString(),
+    align: "right",
+  },
+  {
+    title: "Put Volume",
+    dataIndex: "totalPEVol",
+    key: "totalPEVol",
+    render: (v) => v.toLocaleString(),
+    align: "right",
+  },
+  {
+    title: "PCR (OI)",
+    dataIndex: "pcrOI",
+    key: "pcrOI",
+    render: (v) => v.toFixed(2),
+    align: "right",
+  },
+];
+
+function getSummaryDataForExpiry(records, expiry) {
+  const filtered = records.filter((rec) => rec.expiryDate === expiry);
+  const summary = {
+    expiryDate: expiry,
+    totalCEOI: 0,
+    totalCECCOI: 0,
+    totalCEVol: 0,
+    totalPEOI: 0,
+    totalPECCOI: 0,
+    totalPEVol: 0,
+    pcrOI: 0,
+  };
+
+  for (const rec of filtered) {
+    summary.totalCEOI += rec.ceOpenInterest || 0;
+    summary.totalCECCOI += rec.ceChangeInOI || 0;
+    summary.totalCEVol += rec.ceVolume || 0;
+
+    summary.totalPEOI += rec.peOpenInterest || 0;
+    summary.totalPECCOI += rec.peChangeInOI || 0;
+    summary.totalPEVol += rec.peVolume || 0;
+  }
+
+  summary.pcrOI = summary.totalCEOI === 0 ? 0 : summary.totalPEOI / summary.totalCEOI;
+  return summary;
+}
+
 function OptionChainTable() {
   const [loading, setLoading] = useState(true);
   const [rawRecords, setRawRecords] = useState([]);
@@ -229,6 +317,8 @@ function OptionChainTable() {
   const [maxStrike, setMaxStrike] = useState(null);
   const [expiryDates, setExpiryDates] = useState([]);
   const [selectedExpiry, setSelectedExpiry] = useState(undefined);
+
+  const [summaryData, setSummaryData] = useState([]);
 
   useEffect(() => {
     const source = new EventSource("http://localhost:4300/api/data");
@@ -276,12 +366,13 @@ function OptionChainTable() {
         });
 
         const allRecords = Object.values(map);
+        const sortedExpiry = [...expirySet].sort();
+        const summary = sortedExpiry.slice(0, 2).map((exp) => getSummaryDataForExpiry(allRecords, exp));
+
         setRawRecords(allRecords);
-        setExpiryDates([...expirySet].sort());
-        setMeta({
-          timestamp: res.timestamp,
-          underlyingValue: res.underlyingValue,
-        });
+        setExpiryDates(sortedExpiry);
+        setMeta({ timestamp: res.timestamp, underlyingValue: res.underlyingValue });
+        setSummaryData(summary);
         setLoading(false);
       } catch (err) {
         console.error("Failed to parse SSE message", err);
@@ -340,35 +431,17 @@ function OptionChainTable() {
           </span>
         }
       >
-        <div className="flex flex-col sm:flex-row
-         flex-wrap items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-600">Strike Price:</span>
-            <InputNumber
-              min={0}
-              placeholder="Min"
-              size="small"
-              value={minStrike}
-              onChange={setMinStrike}
-              className="!w-24"
-            />
+            <InputNumber min={0} placeholder="Min" size="small" value={minStrike} onChange={setMinStrike} className="!w-24" />
             <span>-</span>
-            <InputNumber
-              min={0}
-              placeholder="Max"
-              size="small"
-              value={maxStrike}
-              onChange={setMaxStrike}
-              className="!w-24"
-            />
-            <Button
-              size="small"
-              onClick={() => {
-                setMinStrike(null);
-                setMaxStrike(null);
-                if (expiryDates.length) setSelectedExpiry(undefined);
-              }}
-            >
+            <InputNumber min={0} placeholder="Max" size="small" value={maxStrike} onChange={setMaxStrike} className="!w-24" />
+            <Button size="small" onClick={() => {
+              setMinStrike(null);
+              setMaxStrike(null);
+              if (expiryDates.length) setSelectedExpiry(undefined);
+            }}>
               Reset
             </Button>
           </div>
@@ -385,13 +458,26 @@ function OptionChainTable() {
               allowClear
             >
               {expiryDates.map((exp) => (
-                <Option key={exp} value={exp}>
-                  {exp}
-                </Option>
+                <Option key={exp} value={exp}>{exp}</Option>
               ))}
             </Select>
           </div>
         </div>
+
+        {summaryData.length > 0 && (
+          <>
+            <Title level={5}>Expiry Summary</Title>
+            <Table
+              pagination={false}
+              columns={summaryColumns}
+              dataSource={summaryData}
+              size="small"
+              bordered
+              rowKey="expiryDate"
+              className="mb-6"
+            />
+          </>
+        )}
 
         {error && <Alert message={error} type="error" className="mb-4" />}
         {loading ? (
@@ -400,9 +486,7 @@ function OptionChainTable() {
           </div>
         ) : (
           <Table
-            pagination={{
-              pageSize: 100
-            }}
+            pagination={{ pageSize: 100 }}
             columns={columns}
             dataSource={records}
             size="small"
@@ -411,7 +495,6 @@ function OptionChainTable() {
             rowClassName="text-xs text-center"
             className="rounded-2xl min-w-[1400px]"
             sticky
-            
           />
         )}
       </Card>
