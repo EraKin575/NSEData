@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+/*
+ProcessingOptionChain fetches option chain data at regular intervals,
+processes it, and writes it to CSV files.
+It runs in a loop, checking the current time against market open and close times.
+It uses a ticker to fetch data every 3 minutes.
+
+*/
+
 func ProcessingOptionChain(records *[]models.Records, startTime, endTime time.Time, loc *time.Location, mu *sync.RWMutex) {
 
 	ticker := time.NewTicker(3 * time.Minute)
