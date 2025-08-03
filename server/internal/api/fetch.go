@@ -100,6 +100,7 @@ func FetchData() (models.Records, error) {
 			PE:          entry.PE,
 			ExpiryDate:  entry.ExpiryDate,
 		}
+		
 		switch entry.ExpiryDate {
 		case firstExpiry:
 			expiryOneResult = append(expiryOneResult, data)
