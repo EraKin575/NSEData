@@ -19,7 +19,7 @@ func main() {
 	}
 
 	now := time.Now().In(loc)
-	endTime := time.Date(now.Year(), now.Month(), now.Day(), 21, 59, 0, 0, loc)
+	endTime := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, loc)
 
 	http.HandleFunc("/api/data", handlers.HandlePost(&records, loc, endTime, mu))
 
@@ -30,7 +30,7 @@ func main() {
 		}
 	}()
 
-	startTime := time.Date(now.Year(), now.Month(), now.Day(), 00, 01, 0, 0, loc)
+	startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, loc)
 
 	processing.ProcessingOptionChain(&records, startTime, endTime, loc, mu)
 }

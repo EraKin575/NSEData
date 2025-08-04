@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Table, Card, Spin, Alert, InputNumber, Select, Button, Tabs } from "antd";
-import { Typography } from "antd";
-import OILineChart from "./charts";
+import { Table, Card, Spin, Alert, InputNumber, Select, Button, Tabs, Typography } from "antd";
+import OILineChart from "./charts"; // Assuming this file exists
+
 const { Option } = Select;
 const { Title } = Typography;
 const { TabPane } = Tabs;
 
+// Column definitions remain the same
 const columns = [
- {
+  {
     title: "Timestamp",
     dataIndex: "timestamp",
     key: "timestamp",
@@ -18,6 +19,7 @@ const columns = [
       const dateB = new Date(b.timestamp);
       return dateA.getTime() - dateB.getTime();
     },
+    defaultSortOrder: 'descend',
   },
   {
     title: "Expiry Date",
@@ -85,7 +87,7 @@ const columns = [
     title: "Spot",
     dataIndex: "underlyingValue",
     key: "underlyingValue",
-    render: (v) => v ? v.toFixed(2) : "-",
+    render: (v) => (v ? v.toFixed(2) : "-"),
     sorter: (a, b) => (a.underlyingValue || 0) - (b.underlyingValue || 0),
     width: 80,
     align: "center",
@@ -94,7 +96,11 @@ const columns = [
     title: <span>Strike Price</span>,
     dataIndex: "strikePrice",
     key: "strikePrice",
-    render: (v) => <div className="bg-amber-200 p-0"><strong className="text-amber-600 p-0.5">{v?.toLocaleString()}</strong></div>,
+    render: (v) => (
+      <div className="bg-amber-200 p-0">
+        <strong className="text-amber-600 p-0.5">{v?.toLocaleString()}</strong>
+      </div>
+    ),
     sorter: (a, b) => (a.strikePrice || 0) - (b.strikePrice || 0),
     width: 100,
     align: "center",
@@ -160,25 +166,14 @@ const columns = [
     render: (_, record) => {
       const pePChange = record?.pePChangeInOI || 0;
       const cePChange = record?.cePChangeInOI || 0;
-      
       if (cePChange === 0) return "-";
-      
       const pcr = pePChange / cePChange;
       return isFinite(pcr) ? pcr.toFixed(2) : "-";
     },
     sorter: (a, b) => {
-      const pePChangeA = a.pePChangeInOI || 0;
-      const cePChangeA = a.cePChangeInOI || 0;
-      const pePChangeB = b.pePChangeInOI || 0;
-      const cePChangeB = b.cePChangeInOI || 0;
-      
-      const pcrA = cePChangeA === 0 ? 0 : pePChangeA / cePChangeA;
-      const pcrB = cePChangeB === 0 ? 0 : pePChangeB / cePChangeB;
-      
-      const finalA = isFinite(pcrA) ? pcrA : 0;
-      const finalB = isFinite(pcrB) ? pcrB : 0;
-      
-      return finalA - finalB;
+      const pcrA = (a.cePChangeInOI || 0) === 0 ? 0 : (a.pePChangeInOI || 0) / a.cePChangeInOI;
+      const pcrB = (b.cePChangeInOI || 0) === 0 ? 0 : (b.pePChangeInOI || 0) / b.cePChangeInOI;
+      return (isFinite(pcrA) ? pcrA : 0) - (isFinite(pcrB) ? pcrB : 0);
     },
     width: 100,
     align: "right",
@@ -190,100 +185,37 @@ const columns = [
     render: (_, record) => {
       const peOI = record?.peOpenInterest || 0;
       const ceOI = record?.ceOpenInterest || 0;
-      
       if (ceOI === 0) return "-";
-      
       const pcr = peOI / ceOI;
       return isFinite(pcr) ? pcr.toFixed(2) : "-";
     },
     sorter: (a, b) => {
-      const peOIA = a.peOpenInterest || 0;
-      const ceOIA = a.ceOpenInterest || 0;
-      const peOIB = b.peOpenInterest || 0;
-      const ceOIB = b.ceOpenInterest || 0;
-      
-      const pcrA = ceOIA === 0 ? 0 : peOIA / ceOIA;
-      const pcrB = ceOIB === 0 ? 0 : peOIB / ceOIB;
-      
-      const finalA = isFinite(pcrA) ? pcrA : 0;
-      const finalB = isFinite(pcrB) ? pcrB : 0;
-      
-      return finalA - finalB;
+      const pcrA = (a.ceOpenInterest || 0) === 0 ? 0 : (a.peOpenInterest || 0) / a.ceOpenInterest;
+      const pcrB = (b.ceOpenInterest || 0) === 0 ? 0 : (b.peOpenInterest || 0) / b.ceOpenInterest;
+      return (isFinite(pcrA) ? pcrA : 0) - (isFinite(pcrB) ? pcrB : 0);
     },
     width: 80,
     align: "right",
-  }
+  },
 ];
 
-// Summary Table Columns
 const summaryColumns = [
-  {
-    title: "Expiry Date",
-    dataIndex: "expiryDate",
-    key: "expiryDate",
-    align: "center",
-  },
-  {
-    title: "Call OI",
-    dataIndex: "totalCEOI",
-    key: "totalCEOI",
-    render: (v) => v.toLocaleString(),
-    align: "right",
-  },
-  {
-    title: "Call CCOI",
-    dataIndex: "totalCECCOI",
-    key: "totalCECCOI",
-    render: (v) => v.toLocaleString(),
-    align: "right",
-  },
-  {
-    title: "Call Volume",
-    dataIndex: "totalCEVol",
-    key: "totalCEVol",
-    render: (v) => v.toLocaleString(),
-    align: "right",
-  },
-  {
-    title: "Put OI",
-    dataIndex: "totalPEOI",
-    key: "totalPEOI",
-    render: (v) => v.toLocaleString(),
-    align: "right",
-  },
-  {
-    title: "Put CCOI",
-    dataIndex: "totalPECCOI",
-    key: "totalPECCOI",
-    render: (v) => v.toLocaleString(),
-    align: "right",
-  },
-  {
-    title: "Put Volume",
-    dataIndex: "totalPEVol",
-    key: "totalPEVol",
-    render: (v) => v.toLocaleString(),
-    align: "right",
-  },
-  {
-    title: "PCR (OI)",
-    dataIndex: "pcrOI",
-    key: "pcrOI",
-    render: (v) => v.toFixed(2),
-    align: "right",
-  },
+  { title: "Expiry Date", dataIndex: "expiryDate", key: "expiryDate", align: "center" },
+  { title: "Call OI", dataIndex: "totalCEOI", key: "totalCEOI", render: (v) => v.toLocaleString(), align: "right" },
+  { title: "Call CCOI", dataIndex: "totalCECCOI", key: "totalCECCOI", render: (v) => v.toLocaleString(), align: "right" },
+  { title: "Call Volume", dataIndex: "totalCEVol", key: "totalCEVol", render: (v) => v.toLocaleString(), align: "right" },
+  { title: "Put OI", dataIndex: "totalPEOI", key: "totalPEOI", render: (v) => v.toLocaleString(), align: "right" },
+  { title: "Put CCOI", dataIndex: "totalPECCOI", key: "totalPECCOI", render: (v) => v.toLocaleString(), align: "right" },
+  { title: "Put Volume", dataIndex: "totalPEVol", key: "totalPEVol", render: (v) => v.toLocaleString(), align: "right" },
+  { title: "PCR (OI)", dataIndex: "pcrOI", key: "pcrOI", render: (v) => v.toFixed(2), align: "right" },
 ];
 
 function getSummaryDataForExpiry(records, expiry) {
   const filtered = records.filter((rec) => rec.expiryDate === expiry);
   const summary = {
     expiryDate: expiry,
-    totalCEOI: 0,
-    totalCECCOI: 0,
-    totalCEVol: 0,
-    totalPEOI: 0,
-    totalPECCOI: 0,
-    totalPEVol: 0,
+    totalCEOI: 0, totalCECCOI: 0, totalCEVol: 0,
+    totalPEOI: 0, totalPECCOI: 0, totalPEVol: 0,
     pcrOI: 0,
   };
 
@@ -291,7 +223,6 @@ function getSummaryDataForExpiry(records, expiry) {
     summary.totalCEOI += rec.ceOpenInterest || 0;
     summary.totalCECCOI += rec.ceChangeInOI || 0;
     summary.totalCEVol += rec.ceVolume || 0;
-
     summary.totalPEOI += rec.peOpenInterest || 0;
     summary.totalPECCOI += rec.peChangeInOI || 0;
     summary.totalPEVol += rec.peVolume || 0;
@@ -302,104 +233,217 @@ function getSummaryDataForExpiry(records, expiry) {
 }
 
 function OptionChainTable() {
-  const [loading, setLoading] = useState(true);
   const [rawRecords, setRawRecords] = useState([]);
-  const [records, setRecords] = useState([]);
+  const [expiryDates, setExpiryDates] = useState([]);
+  const [summaryData, setSummaryData] = useState([]);
   const [meta, setMeta] = useState({ timestamp: "", underlyingValue: 0 });
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  const [records, setRecords] = useState([]);
   const [minStrike, setMinStrike] = useState(null);
   const [maxStrike, setMaxStrike] = useState(null);
-  const [expiryDates, setExpiryDates] = useState([]);
   const [selectedExpiry, setSelectedExpiry] = useState(undefined);
-
-  const [summaryData, setSummaryData] = useState([]);
   const [historicalData, setHistoricalData] = useState([]);
+  const [isDataReceived, setDataReceived] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
 
   useEffect(() => {
-    const source = new EventSource("http://localhost:4300/api/data");
-    const timeout = setTimeout(() => {
-      setError("No data received from SSE server.");
-      setLoading(false);
-      source.close();
-    }, 5000);
+    let eventSource = null;
+    let retryTimeoutId = null;
+    let retryCount = 0;
+    const maxRetries = 5;
 
-    source.onmessage = (event) => {
+    const connectSSE = () => {
+      setConnectionStatus('connecting');
+      setError(null);
+      
       try {
-        clearTimeout(timeout);
-        const parsedData = JSON.parse(event.data);
+        eventSource = new EventSource("http://localhost:4300/api/data");
+        
+        eventSource.onopen = () => {
+          console.log('SSE connection opened');
+          setConnectionStatus('connected');
+          retryCount = 0;
+        };
 
-        if (!Array.isArray(parsedData) || parsedData.length === 0) {
-          return;
-        }
+        eventSource.onmessage = (event) => {
+          try {
+            setLoading(false);
+            setConnectionStatus('receiving');
 
-        const recordToShow = parsedData[0];
+            if (!event.data || event.data.trim() === '') {
+              console.warn('Received empty SSE data');
+              return;
+            }
 
-        // Store historical data for charts
-        setHistoricalData(prev => {
-          const newData = [...prev, recordToShow];
-          // Keep only last 100 data points to prevent memory issues
-          return newData.slice(-100);
-        });
+            const parsedData = JSON.parse(event.data);
+            if (!parsedData) {
+              console.warn('Parsed data is null or undefined');
+              return;
+            }
+            
+            let dataArray, latestTimestamp, latestUnderlyingValue;
+            
+            if (Array.isArray(parsedData) && parsedData.length > 0) {
+              const allRecordsData = [];
+              const timestampsSet = new Set();
+              
+              for (const record of parsedData) {
+                if (record && record.data && Array.isArray(record.data)) {
+                  const recordTimestamp = record.timestamp || record.TimeStamp;
+                  const recordUnderlyingValue = record.underlyingValue || record.UnderlyingValue;
+                  timestampsSet.add(recordTimestamp);
+                  
+                  const recordDataWithMeta = record.data.map(item => ({
+                    ...item,
+                    recordTimestamp: recordTimestamp,
+                    recordUnderlyingValue: recordUnderlyingValue
+                  }));
+                  allRecordsData.push(...recordDataWithMeta);
+                }
+              }
+              
+              dataArray = allRecordsData;
+              const sortedTimestamps = Array.from(timestampsSet).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+              latestTimestamp = sortedTimestamps[0];
+              const latestRecord = parsedData.find(r => (r.timestamp || r.TimeStamp) === latestTimestamp);
+              latestUnderlyingValue = latestRecord?.underlyingValue || latestRecord?.UnderlyingValue;
+            } else {
+              console.error('Unexpected data structure:', parsedData);
+              setError('Unexpected data structure from server.');
+              return;
+            }
 
-        const map = {};
-        const expirySet = new Set();
+            if (!dataArray || dataArray.length === 0) {
+              console.warn('No data array found or empty array');
+              return;
+            }
 
-        recordToShow.data.forEach((item) => {
-          const key = item.strikePrice + "-" + item.expiryDate;
-          expirySet.add(item.expiryDate);
-          if (!map[key]) {
-            map[key] = {
-              key,
-              strikePrice: item.strikePrice,
-              expiryDate: item.expiryDate,
-              timestamp: recordToShow.timestamp,
-              underlyingValue: recordToShow.underlyingValue,
-            };
+            setDataReceived(true);
+            const recordMap = {};
+            const expirySet = new Set();
+
+            // =================================================================
+            // START OF FIX: This loop now correctly processes all historical data.
+            // =================================================================
+            for (const item of dataArray) {
+              if (!item || typeof item !== 'object') continue;
+
+              const strikePrice = item.strikePrice;
+              const expiryDate = item.expiryDate;
+              
+              // FIX #1: Get the timestamp that belongs to THIS specific item.
+              // This was the source of the bug, as it was using a generic timestamp before.
+              const itemTimestamp = item.recordTimestamp;
+              
+              if (!strikePrice || !expiryDate || !itemTimestamp) {
+                console.warn('Missing required fields in item:', item);
+                continue;
+              }
+
+              // FIX #2: Create a key that is unique for every single data point
+              // by including the timestamp. This prevents overwriting historical data.
+              const key = `${strikePrice}-${expiryDate}-${itemTimestamp}`;
+              expirySet.add(expiryDate);
+
+              // This check now correctly identifies unique data points.
+              if (!recordMap[key]) {
+                recordMap[key] = {
+                  key,
+                  strikePrice: Number(strikePrice),
+                  expiryDate: expiryDate,
+                  // FIX #3: Assign the item's own timestamp and underlying value.
+                  timestamp: itemTimestamp,
+                  underlyingValue: Number(item.recordUnderlyingValue) || null,
+                };
+              }
+
+              // Assign CE (Call) data
+              if (item.CE && typeof item.CE === 'object') {
+                Object.assign(recordMap[key], {
+                  ceOpenInterest: Number(item.CE.openInterest || 0),
+                  ceChangeInOI: Number(item.CE.changeinOpenInterest || 0),
+                  cePChangeInOI: Number(item.CE.pchangeinOpenInterest || 0),
+                  ceVolume: Number(item.CE.totalTradedVolume || 0),
+                  ceIV: Number(item.CE.impliedVolatility || 0),
+                  ceLTP: Number(item.CE.lastPrice || 0),
+                });
+              }
+
+              // Assign PE (Put) data
+              if (item.PE && typeof item.PE === 'object') {
+                Object.assign(recordMap[key], {
+                  peOpenInterest: Number(item.PE.openInterest || 0),
+                  peChangeInOI: Number(item.PE.changeinOpenInterest || 0),
+                  pePChangeInOI: Number(item.PE.pchangeinOpenInterest || 0),
+                  peVolume: Number(item.PE.totalTradedVolume || 0),
+                  peIV: Number(item.PE.impliedVolatility || 0),
+                  peLTP: Number(item.PE.lastPrice || 0),
+                });
+              }
+            }
+            // =================================================================
+            // END OF FIX
+            // =================================================================
+
+            const allRecords = Object.values(recordMap);
+            const sortedExpiry = [...expirySet].sort();
+
+            if (allRecords.length === 0) {
+              setError('No valid records were processed from the data');
+              return;
+            }
+
+            setRawRecords(allRecords);
+            setExpiryDates(sortedExpiry);
+            setMeta({
+              timestamp: latestTimestamp,
+              underlyingValue: Number(latestUnderlyingValue) || 0,
+            });
+            setError(null);
+            setConnectionStatus('connected');
+
+          } catch (err) {
+            console.error("SSE MESSAGE PROCESSING ERROR:", err);
+            setError(`Data processing error: ${err.message}`);
+            setConnectionStatus('error');
           }
-          if (item.CE) {
-            map[key].ceOpenInterest = item.CE.openInterest;
-            map[key].ceChangeInOI = item.CE.changeinOpenInterest;
-            map[key].cePChangeInOI = item.CE.pchangeinOpenInterest;
-            map[key].ceVolume = item.CE.totalTradedVolume;
-            map[key].ceIV = item.CE.impliedVolatility;
-            map[key].ceLTP = item.CE.lastPrice;
-          }
-          if (item.PE) {
-            map[key].peOpenInterest = item.PE.openInterest;
-            map[key].peChangeInOI = item.PE.changeinOpenInterest;
-            map[key].pePChangeInOI = item.PE.pchangeinOpenInterest;
-            map[key].peVolume = item.PE.totalTradedVolume;
-            map[key].peIV = item.PE.impliedVolatility;
-            map[key].peLTP = item.PE.lastPrice;
-          }
-        });
+        };
 
-        const allRecords = Object.values(map);
-        const sortedExpiry = [...expirySet].sort();
-        const summary = sortedExpiry.slice(0, 2).map((exp) => getSummaryDataForExpiry(allRecords, exp));
+        eventSource.onerror = () => {
+          console.error('SSE connection error');
+          setConnectionStatus('error');
+          if (eventSource.readyState === EventSource.CLOSED) {
+            setError("Connection closed. Retrying...");
+            retryConnection();
+          }
+          setLoading(false);
+        };
 
-        setRawRecords(allRecords);
-        setExpiryDates(sortedExpiry);
-        setMeta({ timestamp: recordToShow.timestamp, underlyingValue: recordToShow.underlyingValue });
-        setSummaryData(summary);
-        setLoading(false);
       } catch (err) {
-        console.error("Failed to parse SSE message", err);
-        setError("Failed to parse SSE data.");
+        console.error('Error creating EventSource:', err);
+        setError(`Connection error: ${err.message}`);
         setLoading(false);
+        setConnectionStatus('error');
       }
     };
 
-    source.onerror = () => {
-      setError("SSE connection error.");
-      setLoading(false);
-      source.close();
+    const retryConnection = () => {
+      if (retryCount < maxRetries) {
+        retryCount++;
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+        console.log(`Retrying connection in ${delay / 1000}s...`);
+        retryTimeoutId = setTimeout(connectSSE, delay);
+      } else {
+        setError("Failed to connect after multiple attempts.");
+      }
     };
 
+    connectSSE();
+
     return () => {
-      clearTimeout(timeout);
-      source.close();
+      if (eventSource) eventSource.close();
+      if (retryTimeoutId) clearTimeout(retryTimeoutId);
     };
   }, []);
 
@@ -407,7 +451,7 @@ function OptionChainTable() {
     if (!selectedExpiry && expiryDates.length) {
       setSelectedExpiry(expiryDates[0]);
     }
-  }, [expiryDates]);
+  }, [expiryDates, selectedExpiry]);
 
   useEffect(() => {
     let filtered = rawRecords;
@@ -423,6 +467,22 @@ function OptionChainTable() {
     setRecords(filtered);
   }, [rawRecords, minStrike, maxStrike, selectedExpiry]);
 
+  useEffect(() => {
+    if (rawRecords.length > 0 && expiryDates.length > 0) {
+      const summary = expiryDates
+        .slice(0, 2)
+        .map((exp) => getSummaryDataForExpiry(rawRecords, exp));
+      setSummaryData(summary);
+    }
+  }, [rawRecords, expiryDates]);
+
+  const statusInfo = {
+    connecting: { message: "Connecting to data stream...", type: "info" },
+    connected: { message: isDataReceived ? "Connected, streaming data" : "Connected, waiting for data...", type: "success" },
+    receiving: { message: "Live data stream active", type: "success" },
+    error: { message: error || "Connection error", type: "error" },
+  }[connectionStatus] || { message: "Unknown status", type: "warning" };
+
   return (
     <div className="w-screen h-screen p-4 overflow-auto bg-white">
       <Card
@@ -431,14 +491,24 @@ function OptionChainTable() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <span className="text-lg font-bold">NIFTY Option Chain</span>
             <span className="text-sm text-gray-500 mt-2 sm:mt-0">
-              Last Updated: {meta.timestamp ? new Date(meta.timestamp).toLocaleString() : "--"}
+              Last Updated:{" "}
+              {meta.timestamp ? new Date(meta.timestamp).toLocaleString() : "--"}
             </span>
           </div>
         }
         extra={
-          <span className="text-blue-700 font-semibold text-xl">
-            Underlying Value: {meta.underlyingValue || "--"}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-blue-700 font-semibold text-xl">
+              Underlying Value: {meta.underlyingValue || "--"}
+            </span>
+            <span className={`text-xs px-2 py-1 rounded ${
+              statusInfo.type === 'success' ? 'bg-green-100 text-green-800' :
+              statusInfo.type === 'info' ? 'bg-blue-100 text-blue-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {connectionStatus.toUpperCase()}
+            </span>
+          </div>
         }
       >
         <Tabs defaultActiveKey="table" className="w-full">
@@ -446,16 +516,9 @@ function OptionChainTable() {
             <div className="flex flex-col sm:flex-row flex-wrap items-center gap-4 mb-4">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-600">Strike Price:</span>
-                <InputNumber min={0} placeholder="Min" size="small" value={minStrike} onChange={setMinStrike} className="!w-24" />
+                <InputNumber size="small" placeholder="Min" value={minStrike} onChange={setMinStrike} className="!w-24" />
                 <span>-</span>
-                <InputNumber min={0} placeholder="Max" size="small" value={maxStrike} onChange={setMaxStrike} className="!w-24" />
-                <Button size="small" onClick={() => {
-                  setMinStrike(null);
-                  setMaxStrike(null);
-                  if (expiryDates.length) setSelectedExpiry(undefined);
-                }}>
-                  Reset
-                </Button>
+                <InputNumber size="small" placeholder="Max" value={maxStrike} onChange={setMaxStrike} className="!w-24" />
               </div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-gray-600">Expiry Date:</span>
@@ -466,39 +529,34 @@ function OptionChainTable() {
                   value={selectedExpiry}
                   onChange={(value) => setSelectedExpiry(value ?? undefined)}
                   className="!w-48"
-                  optionFilterProp="children"
                   allowClear
                 >
-                  {expiryDates.map((exp) => (
-                    <Option key={exp} value={exp}>{exp}</Option>
-                  ))}
+                  {expiryDates.map((exp) => <Option key={exp} value={exp}>{exp}</Option>)}
                 </Select>
               </div>
+              <Button size="small" onClick={() => { setMinStrike(null); setMaxStrike(null); setSelectedExpiry(undefined); }}>
+                Reset Filters
+              </Button>
             </div>
 
             {summaryData.length > 0 && (
               <>
                 <Title level={5}>Expiry Summary</Title>
-                <Table
-                  pagination={false}
-                  columns={summaryColumns}
-                  dataSource={summaryData}
-                  size="small"
-                  bordered
-                  rowKey="expiryDate"
-                  className="mb-6"
-                />
+                <Table pagination={false} columns={summaryColumns} dataSource={summaryData} size="small" bordered rowKey="expiryDate" className="mb-6" />
               </>
             )}
 
-            {error && <Alert message={error} type="error" className="mb-4" />}
+            <Alert message={statusInfo.message} type={statusInfo.type} className="mb-4" />
+            
             {loading ? (
+              <div className="flex justify-center items-center min-h-[200px]"><Spin size="large" /></div>
+            ) : !isDataReceived ? (
               <div className="flex justify-center items-center min-h-[200px]">
-                <Spin size="large" />
+                <Alert message="No data received yet" description="Please ensure the server is running and streaming data." type="warning" showIcon />
               </div>
             ) : (
               <Table
-                pagination={{ pageSize: 100 }}
+                pagination={{ pageSize: 100, showSizeChanger: true, pageSizeOptions: ['50', '100', '200', '500'] }}
                 columns={columns}
                 dataSource={records}
                 size="small"
@@ -510,7 +568,6 @@ function OptionChainTable() {
               />
             )}
           </TabPane>
-          
           <TabPane tab="Line Charts" key="charts">
             <OILineChart data={historicalData} />
           </TabPane>

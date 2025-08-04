@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"server/models"
 	"sync"
@@ -49,11 +50,12 @@ func HandlePost(data *[]models.Records, loc *time.Location, endTime time.Time, m
 			}
 
 			// Write SSE-formatted data
+			log.Printf("Streaming %d records", len(*data))
 			fmt.Fprintf(w, "data: %s\n\n", jsonRecords)
 			flusher.Flush()
 
 			// Sleep for 1 second before next push
-			time.Sleep(1 * time.Second)
+			time.Sleep(3 * time.Minute)
 		}
 	}
 }
