@@ -18,10 +18,7 @@ func main() {
 		log.Fatalf("Failed to load timezone: %v", err)
 	}
 
-	now := time.Now().In(loc)
-	endTime := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, loc)
-
-	http.HandleFunc("/api/data", handlers.HandlePost(&records, loc, endTime, mu))
+	http.HandleFunc("/api/data", handlers.HandlePost(&records, loc, mu))
 
 	go func() {
 		log.Println("Starting server on :4300")
@@ -30,7 +27,5 @@ func main() {
 		}
 	}()
 
-	startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, loc)
-
-	processing.ProcessingOptionChain(&records, startTime, endTime, loc, mu)
+	processing.ProcessingOptionChain(&records, loc, mu)
 }

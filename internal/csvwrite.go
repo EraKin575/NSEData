@@ -1,4 +1,4 @@
-package utils
+package csvwriter
 
 import (
 	"encoding/csv"
@@ -11,18 +11,36 @@ import (
 )
 
 func WriteRecordsToCSV(records []models.Records) {
-	expiryGroups := make(map[string][]models.OptionData)
+	layout := "02-Jan-2006 15:04:05"
+	type OptionWithMeta struct {
+		Option     models.OptionData
+		Spot       float64
+		Timestamp  time.Time
+		ExpiryDate string
+	}
+
+	expiryGroups := make(map[string][]OptionWithMeta)
 
 	for _, snapshot := range records {
 		for _, od := range snapshot.Data {
 			expiry := od.ExpiryDate
-			expiryGroups[expiry] = append(expiryGroups[expiry], od)
+			timeStamp, err := time.Parse(layout, snapshot.TimeStamp)
+			if err != nil {
+				log.Printf("❌ Failed to parse timestamp %s: %v", snapshot.TimeStamp, err)
+				continue
+			}
+			expiryGroups[expiry] = append(expiryGroups[expiry], OptionWithMeta{
+				Option:     od,
+				Spot:       snapshot.UnderlyingValue,
+				Timestamp:  timeStamp,
+				ExpiryDate: expiry,
+			})
 		}
 	}
 
 	today := time.Now().Format("2006-01-02")
 
-	for expiry, data := range expiryGroups {
+	for expiry, entries := range expiryGroups {
 		filename := fmt.Sprintf("%s_%s.csv", today, expiry)
 		file, err := os.Create(filename)
 		if err != nil {
@@ -33,19 +51,38 @@ func WriteRecordsToCSV(records []models.Records) {
 
 		writer := csv.NewWriter(file)
 
-		// Header
+		// CSV Header as per your required order
 		writer.Write([]string{
-			"StrikePrice",
-			"CE_OI", "CE_ChangeInOI", "CE_Volume", "CE_IV", "CE_LTP",
-			"PE_OI", "PE_ChangeInOI", "PE_Volume", "PE_IV", "PE_LTP",
-			"PCR", "IntradayPCR",
+			"Timestamp",
+			"Expiry Date",
+			"COI",
+			"CCOI",
+			"CCOI%",
+			"CVol",
+			"CIV",
+			"CE LTP",
+			"Spot",
+			"Strike Price",
+			"PE LTP",
+			"PE IV",
+			"PE Vol",
+			"PCOI%",
+			"PCOI",
+			"POI",
+			"IntraDay PCR",
+			"PCR",
 		})
 
-		for _, od := range data {
+		for _, entry := range entries {
+			od := entry.Option
+			spot := entry.Spot
+			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05")
+			expiry := entry.ExpiryDate
+
 			ce := od.CE
 			pe := od.PE
 
-			// Safe dereference
+			// CE values
 			ceOI, ceChOI, ceVol, ceIV, ceLTP := 0.0, 0.0, 0, 0.0, 0.0
 			if ce != nil {
 				ceOI = ce.OpenInterest
@@ -55,6 +92,7 @@ func WriteRecordsToCSV(records []models.Records) {
 				ceLTP = ce.LastPrice
 			}
 
+			// PE values
 			peOI, peChOI, peVol, peIV, peLTP := 0.0, 0.0, 0, 0.0, 0.0
 			if pe != nil {
 				peOI = pe.OpenInterest
@@ -64,26 +102,31 @@ func WriteRecordsToCSV(records []models.Records) {
 				peLTP = pe.LastPrice
 			}
 
+			// Calculated values
+			ccoiPct := calculatePercentage(ceChOI, ceOI)
+			pcoiPct := calculatePercentage(peChOI, peOI)
 			pcr := calculateRatio(peOI, ceOI)
 			intradayPCR := calculateRatio(peChOI, ceChOI)
 
 			row := []string{
-				fmt.Sprintf("%.2f", od.StrikePrice),
-
+				timestamp,
+				expiry,
 				fmt.Sprintf("%.0f", ceOI),
 				fmt.Sprintf("%.0f", ceChOI),
+				ccoiPct,
 				fmt.Sprintf("%d", ceVol),
 				fmt.Sprintf("%.2f", ceIV),
 				fmt.Sprintf("%.2f", ceLTP),
-
-				fmt.Sprintf("%.0f", peOI),
-				fmt.Sprintf("%.0f", peChOI),
-				fmt.Sprintf("%d", peVol),
-				fmt.Sprintf("%.2f", peIV),
+				fmt.Sprintf("%.2f", spot),
+				fmt.Sprintf("%.2f", od.StrikePrice),
 				fmt.Sprintf("%.2f", peLTP),
-
-				pcr,
+				fmt.Sprintf("%.2f", peIV),
+				fmt.Sprintf("%d", peVol),
+				pcoiPct,
+				fmt.Sprintf("%.0f", peChOI),
+				fmt.Sprintf("%.0f", peOI),
 				intradayPCR,
+				pcr,
 			}
 
 			writer.Write(row)
@@ -94,9 +137,16 @@ func WriteRecordsToCSV(records []models.Records) {
 		if err := writer.Error(); err != nil {
 			log.Printf("❌ Error writing to CSV %s: %v", filename, err)
 		} else {
-			log.Printf("✅ CSV written: %s (%d rows)", filename, len(data))
+			log.Printf("✅ CSV written: %s (%d rows)", filename, len(entries))
 		}
 	}
+}
+
+func calculatePercentage(change, total float64) string {
+	if total == 0 || !isFinite(change/total) {
+		return "-"
+	}
+	return fmt.Sprintf("%.2f", (change/total)*100)
 }
 
 func calculateRatio(num, denom float64) string {
