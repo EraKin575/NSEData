@@ -15,7 +15,6 @@ func ProcessingOptionChain(records *[]models.Records, loc *time.Location, mu *sy
 	ticker := time.NewTicker(3 * time.Minute)
 	defer ticker.Stop()
 
-
 	csvWritten := false
 	var lastTimeStampRecorded string
 
@@ -63,8 +62,6 @@ func ProcessingOptionChain(records *[]models.Records, loc *time.Location, mu *sy
 			mu.Unlock()
 			lastTimeStampRecorded = newRecords.TimeStamp
 		}
-
-		
 
 		<-ticker.C
 	}
