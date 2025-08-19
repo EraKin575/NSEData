@@ -39,3 +39,13 @@ type Records struct {
 type OptionChain struct {
 	Records Records `json:"records"`
 }
+
+type ResponsePayload struct {
+	Timestamp string `json:"timestamp"`
+	ExpiryDate string `json:"expiryDate"`
+	CallOpenInterest float64 `json:"callOpenInterest"`
+	ChangeInOpenInterest float64 `json:"changeInOpenInterest"`
+	
+
+}
+

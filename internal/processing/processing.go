@@ -19,8 +19,8 @@ func ProcessingOptionChain(records *[]models.Records, loc *time.Location, mu *sy
 	for {
 		now := time.Now().In(loc)
 
-		startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, loc)
-		endTime := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, loc)
+		startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 16, 0, 0, loc)
+		endTime := time.Date(now.Year(), now.Month(), now.Day(), 15, 31, 0, 0, loc)
 		resetTime := time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, loc)
 
 		switch {
@@ -44,8 +44,6 @@ func ProcessingOptionChain(records *[]models.Records, loc *time.Location, mu *sy
 				fmt.Println("Records reset at:", now)
 			}
 
-			// Sleep until next check (you can fine-tune this)
-			time.Sleep(1 * time.Minute)
 			continue
 		}
 

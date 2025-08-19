@@ -58,7 +58,6 @@ func HandlePost(data *[]models.Records, loc *time.Location, mu *sync.RWMutex) ht
 			}
 
 			// Write SSE-formatted data
-			log.Printf("Streaming %d records", len(*data))
 			fmt.Fprintf(w, "data: %s\n\n", jsonRecords)
 			flusher.Flush()
 
