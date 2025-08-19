@@ -43,7 +43,7 @@ func HandlePost(data *[]models.Records, loc *time.Location, mu *sync.RWMutex) ht
 			endTime := time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, loc)
 
 			if now.After(endTime) {
-				log.Println("SSE stream stopped: reached 8 PM")
+				log.Println("SSE stream paused")
 				break
 			}
 
