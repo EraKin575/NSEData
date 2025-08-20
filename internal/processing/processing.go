@@ -54,13 +54,36 @@ func ProcessingOptionChain(records *[]models.Records, loc *time.Location, mu *sy
 			log.Println("records not fetched", err)
 			continue
 		}
+		// Add safety checks and debugging
+		if newRecords.TimeStamp == "" {
+			fmt.Println("Empty timestamp received")
+			continue
+		}
 
-		// Checks timestamp before recording if the data is fresh(of the same date) based on timestamp and also takes care of duplicate data
-		if strings.Split(newRecords.TimeStamp, " ")[0] == time.Now().In(loc).Format("2006-01-02") && lastTimeStampRecorded != newRecords.TimeStamp {
+		timestampParts := strings.Split(newRecords.TimeStamp, " ")
+		if len(timestampParts) == 0 {
+			fmt.Println("Invalid timestamp format:", newRecords.TimeStamp)
+			continue
+		}
+
+		datePart := timestampParts[0]
+		expectedDate := time.Now().In(loc).Format("02-Jan-2006")
+
+		fmt.Printf("Timestamp: %s\n", newRecords.TimeStamp)
+		fmt.Printf("Date part: %s\n", datePart)
+		fmt.Printf("Expected: %s\n", expectedDate)
+		fmt.Printf("Last recorded: %s\n", lastTimeStampRecorded)
+
+		if datePart == expectedDate && lastTimeStampRecorded != newRecords.TimeStamp {
 			mu.Lock()
 			*records = append(*records, newRecords)
 			mu.Unlock()
 			lastTimeStampRecorded = newRecords.TimeStamp
+			fmt.Printf("Record added! Total: %d\n", len(*records))
+		} else {
+			fmt.Printf("Record rejected - Date match: %t, Timestamp different: %t\n",
+				datePart == expectedDate,
+				lastTimeStampRecorded != newRecords.TimeStamp)
 		}
 
 		<-ticker.C
