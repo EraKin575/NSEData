@@ -1,0 +1,31 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: optionchain-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: optionuser
+      POSTGRES_PASSWORD: optionpass
+      POSTGRES_DB: optionchain
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../internal/migrations/postgres/option_chain_snapshots.sql:/docker-entrypoint-initdb.d/init.sql:ro  # auto-run SQL
+
+  api:
+    build: ..
+    container_name: optionchain-api
+    restart: always
+    environment:
+      DB_DSN: "postgres://optionuser:optionpass@postgres:5432/optionchain?sslmode=disable"
+      PORT: "4300"
+    ports:
+      - "4300:4300"
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
