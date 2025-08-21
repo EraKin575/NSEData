@@ -30,7 +30,7 @@ func main() {
 	go func() {
 		serverErr := server.ListenAndServe()
 		if serverErr != nil {
-			log.Fatalf("Error starting server: %v", serverErr)
+			return
 		}
 	}()
 	// DB connection
