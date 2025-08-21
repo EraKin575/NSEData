@@ -119,10 +119,11 @@ func extractResponsePayload(records models.Records) []models.ResponsePayload {
 		pcr := calculatePCR(peOI, ceOI)
 		intradayPCR := calculatePCR(peChOI, ceChOI)
 
-		timeStamp, err := time.Parse("2006-01-02 15:04:05", records.TimeStamp)
+		timeStamp, err := time.Parse("02-Jan-2006 15:04:05", records.TimeStamp)
 		if err != nil {
 			timeStamp = time.Time{}
 		}
+		
 		expiryDate, err := time.Parse("02-Jan-2006", record.ExpiryDate)
 		if err != nil {
 			expiryDate = time.Time{}
