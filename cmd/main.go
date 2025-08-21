@@ -5,17 +5,34 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"server/handlers"
 	"server/internal/db"
 	"server/internal/processing"
 	"server/models"
 	"sync"
+	"syscall"
 	"time"
 )
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
+	defer stop()
+
+	mux := http.NewServeMux()
+
+	server := http.Server{
+		Addr:    ":8090",
+		Handler: mux,
+	}
+
+	go func() {
+		serverErr := server.ListenAndServe()
+		if serverErr != nil {
+			log.Fatalf("Error starting server: %v", serverErr)
+		}
+	}()
 	// DB connection
 	connString := os.Getenv("DB_DSN")
 	if connString == "" {
@@ -38,22 +55,19 @@ func main() {
 	}
 
 	// HTTP handler
-	http.HandleFunc("/api/data", handlers.HandlePost(&records, loc, mu))
-
-	// Dynamic port for Railway or default local port
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "4300"
-	}
-
-	// Start server in a goroutine
-	go func() {
-		log.Printf("Starting server on :%s", port)
-		if err := http.ListenAndServe(":"+port, nil); err != nil {
-			log.Fatalf("Error starting server: %v", err)
-		}
-	}()
+	mux.HandleFunc("/api/data", handlers.HandlePost(&records, loc, mu))
 
 	// Start processing option chain
 	processing.ProcessingOptionChain(ctx, &records, db, loc, mu)
+
+	<-ctx.Done()
+
+	shutDownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutDownCtx); err != nil {
+		log.Fatalf("Error shutting down server: %v", err)
+	}
+
+
 }

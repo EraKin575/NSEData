@@ -40,7 +40,7 @@ func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWM
 		// Stream data every second until endTime
 		for {
 			now := time.Now().In(loc)
-			endTime := time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, loc)
+			endTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 0, 0, loc)
 
 			if now.After(endTime) {
 				log.Println("SSE stream paused")
