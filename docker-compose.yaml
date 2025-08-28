@@ -1,0 +1,12 @@
+version: '3.9'
+
+services:
+  api:
+    build: .
+    container_name: optionchain-api
+    restart: always
+    environment:
+      DATABASE_URL: "${{Postgres.DATABASE_PUBLIC_URL}}"
+      PORT: "4300"
+    ports:
+      - "4300:4300"
