@@ -33,8 +33,7 @@ func main() {
 			return
 		}
 	}()
-	// DB connection
-	connString := os.Getenv("DB_DSN")
+	connString := os.Getenv("DATABASE_URL")
 	if connString == "" {
 		connString = "postgres://optionuser:optionpass@localhost:5432/optionchain?sslmode=disable"
 	}
@@ -54,10 +53,8 @@ func main() {
 		log.Fatalf("Failed to load timezone: %v", err)
 	}
 
-	// HTTP handler
 	mux.HandleFunc("/api/data", handlers.HandlePost(&records, loc, mu))
 
-	// Start processing option chain
 	processing.ProcessingOptionChain(ctx, &records, db, loc, mu)
 
 	<-ctx.Done()
