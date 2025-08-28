@@ -33,7 +33,7 @@ func main() {
 			return
 		}
 	}()
-	connString := os.Getenv("DATABASE_URL")
+	connString := os.Getenv("DATABASE_PUBLIC_URL")
 	if connString == "" {
 		connString = "postgres://optionuser:optionpass@localhost:5432/optionchain?sslmode=disable"
 	}
