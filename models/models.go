@@ -43,21 +43,23 @@ type OptionChain struct {
 }
 
 type ResponsePayload struct {
-	Timestamp              time.Time `json:"timestamp"`       // Snapshot timestamp
-	ExpiryDate             time.Time `json:"expiryDate"`      // Expiry date of the option
-	StrikePrice            float64   `json:"strikePrice"`     // Strike price
-	UnderlyingValue        float64   `json:"underlyingValue"` // Current underlying (NIFTY) value
-	CEOpenInterest         float64   `json:"ceOpenInterest"`
-	CEChangeInOpenInterest float64   `json:"ceChangeInOpenInterest"`
-	CETotalTradedVolume    int       `json:"ceTotalTradedVolume"`
-	CEImpliedVolatility    float64   `json:"ceImpliedVolatility"`
-	CELastPrice            float64   `json:"ceLastPrice"`
-	PEOpenInterest         float64   `json:"peOpenInterest"`
-	PEChangeInOpenInterest float64   `json:"peChangeInOpenInterest"`
-	PETotalTradedVolume    int       `json:"peTotalTradedVolume"`
-	PEImpliedVolatility    float64   `json:"peImpliedVolatility"`
-	PELastPrice            float64   `json:"peLastPrice"`
-	IntraDayPCR            float64   `json:"intraDayPCR"` // Change in PE OI / Change in CE OI
-	PCR                    float64   `json:"pcr"`         // Total PE OI / Total CE OI
+	Timestamp                        time.Time `json:"timestamp"`  // Snapshot timestamp
+	ExpiryDate                       time.Time `json:"expiryDate"` // Expiry date of the option
+	StrikePrice                      float64   `json:"strikePrice"`
+	UnderlyingValue                  float64   `json:"underlyingValue"` // Current underlying (NIFTY) value
+	CEOpenInterest                   float64   `json:"ceOpenInterest"`
+	CEChangeInOpenInterestPercentage float64   `json:"ceOpenInterestPercentage"`
+	CEChangeInOpenInterest           float64   `json:"ceChangeInOpenInterest"`
+	CETotalTradedVolume              int       `json:"ceTotalTradedVolume"`
+	CEImpliedVolatility              float64   `json:"ceImpliedVolatility"`
+	CELastPrice                      float64   `json:"ceLastPrice"`
+	PEOpenInterest                   float64   `json:"peOpenInterest"`
+	PEChangeInOpenInterestPercentage float64   `json:"peOpenInterestPercentage"`
+	PEChangeInOpenInterest           float64   `json:"peChangeInOpenInterest"`
+	PETotalTradedVolume              int       `json:"peTotalTradedVolume"`
+	PEImpliedVolatility              float64   `json:"peImpliedVolatility"`
+	PELastPrice                      float64   `json:"peLastPrice"`
+	IntraDayPCR                      float64   `json:"intraDayPCR"` // Change in PE OI / Change in CE OI
+	PCR                              float64   `json:"pcr"`         // Total PE OI / Total CE OI
 
 }

@@ -37,7 +37,6 @@ func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWM
 			return
 		}
 
-		// Stream data every second until endTime
 		for {
 			now := time.Now().In(loc)
 			endTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 0, 0, loc)
@@ -47,7 +46,6 @@ func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWM
 				break
 			}
 
-			// Safely read data with mutex
 			mu.RLock()
 			jsonRecords, err := json.Marshal(data)
 			mu.RUnlock()
@@ -57,11 +55,9 @@ func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWM
 				return
 			}
 
-			// Write SSE-formatted data
 			fmt.Fprintf(w, "data: %s\n\n", jsonRecords)
 			flusher.Flush()
 
-			// Sleep for 3 minutes before next push
 			time.Sleep(3 * time.Minute)
 		}
 	}

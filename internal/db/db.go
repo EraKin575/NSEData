@@ -7,6 +7,7 @@ import (
 	"server/models"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,33 +26,36 @@ func InitOptionChainSnapshotsTable(ctx context.Context, pool *pgxpool.Pool) erro
 	CREATE TABLE IF NOT EXISTS option_chain_snapshots (
 		id SERIAL PRIMARY KEY,
 		timestamp TIMESTAMPTZ DEFAULT NOW(),
-		symbol VARCHAR(50),
 		expiry_date DATE NOT NULL,
 		strike_price NUMERIC(10, 2) NOT NULL,
 		underlying_value NUMERIC(10,2),
+
 		ce_oi BIGINT DEFAULT 0,
 		ce_ch_oi BIGINT DEFAULT 0,
+		ce_ch_oi_pct NUMERIC(10,2) DEFAULT 0,
 		ce_vol BIGINT DEFAULT 0,
 		ce_iv NUMERIC(10,2) DEFAULT 0,
 		ce_ltp NUMERIC(10,2) DEFAULT 0,
+
 		pe_oi BIGINT DEFAULT 0,
 		pe_ch_oi BIGINT DEFAULT 0,
+		pe_ch_oi_pct NUMERIC(10,2) DEFAULT 0,
 		pe_vol BIGINT DEFAULT 0,
 		pe_iv NUMERIC(10,2) DEFAULT 0,
 		pe_ltp NUMERIC(10,2) DEFAULT 0,
+
 		intraday_pcr NUMERIC(10,2),
 		pcr NUMERIC(10,2)
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_option_chain_symbol_expiry
-	ON option_chain_snapshots(symbol, expiry_date);
+	CREATE INDEX IF NOT EXISTS idx_option_chain_expiry
+	ON option_chain_snapshots(expiry_date);
 	`
 
 	_, err := pool.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to initialize option_chain_snapshots table: %w", err)
 	}
-
 	return nil
 }
 
@@ -80,24 +84,29 @@ func NewDB(ctx context.Context, connString string) (*DB, error) {
 
 // Writes option chain records to DB
 func (db *DB) WriteToDB(ctx context.Context, records []models.ResponsePayload) error {
+	batch := &pgx.Batch{}
+
 	for _, p := range records {
-		_, err := db.db.Exec(ctx, `
+		batch.Queue(`
 			INSERT INTO option_chain_snapshots (
 				timestamp, expiry_date, strike_price, underlying_value,
-				ce_oi, ce_ch_oi, ce_vol, ce_iv, ce_ltp,
-				pe_oi, pe_ch_oi, pe_vol, pe_iv, pe_ltp,
+				ce_oi, ce_ch_oi, ce_ch_oi_pct, ce_vol, ce_iv, ce_ltp,
+				pe_oi, pe_ch_oi, pe_ch_oi_pct, pe_vol, pe_iv, pe_ltp,
 				intraday_pcr, pcr
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 		`,
 			p.Timestamp, p.ExpiryDate, p.StrikePrice, p.UnderlyingValue,
-			p.CEOpenInterest, p.CEChangeInOpenInterest, p.CETotalTradedVolume, p.CEImpliedVolatility, p.CELastPrice,
-			p.PEOpenInterest, p.PEChangeInOpenInterest, p.PETotalTradedVolume, p.PEImpliedVolatility, p.PELastPrice,
+			p.CEOpenInterest, p.CEChangeInOpenInterest, p.CEChangeInOpenInterestPercentage,
+			p.CETotalTradedVolume, p.CEImpliedVolatility, p.CELastPrice,
+			p.PEOpenInterest, p.PEChangeInOpenInterest, p.PEChangeInOpenInterestPercentage,
+			p.PETotalTradedVolume, p.PEImpliedVolatility, p.PELastPrice,
 			p.IntraDayPCR, p.PCR,
 		)
-		if err != nil {
-			log.Printf("❌ Failed to insert row: %v", err)
-		}
 	}
 
+	br := db.db.SendBatch(ctx, batch)
+	if err := br.Close(); err != nil {
+		return fmt.Errorf("batch insert failed: %w", err)
+	}
 	return nil
 }
