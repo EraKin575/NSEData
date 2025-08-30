@@ -2,8 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,9 +15,16 @@ import (
 	"time"
 )
 
+func initLogger() *slog.Logger {
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})
+	return slog.New(handler)
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-
+	logger := initLogger()
 	defer stop()
 
 	mux := http.NewServeMux()
@@ -29,7 +35,7 @@ func main() {
 	}
 
 	go func() {
-		fmt.Print("Starting server...")
+		logger.Info("Starting server on:", server.Addr)
 		serverErr := server.ListenAndServe()
 		if serverErr != nil {
 			return
@@ -42,7 +48,7 @@ func main() {
 
 	db, err := db.NewDB(ctx, connString)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		logger.Error("Failed to connect to DB:", slog.String("error", err.Error()))
 	}
 
 	// Shared records slice
@@ -52,12 +58,12 @@ func main() {
 	// Timezone
 	loc, err := time.LoadLocation("Asia/Kolkata")
 	if err != nil {
-		log.Fatalf("Failed to load timezone: %v", err)
+		logger.Error("Failed to load timezone:", slog.String("error", err.Error()))
 	}
 
-	mux.HandleFunc("/api/data", handlers.HandlePost(&records, loc, mu))
+	mux.HandleFunc("/api/data", handlers.HandlePost(&records, loc, mu, logger))
 
-	processing.ProcessingOptionChain(ctx, &records, db, loc, mu)
+	processing.ProcessingOptionChain(ctx, &records, db, loc, mu, logger)
 
 	<-ctx.Done()
 
@@ -65,8 +71,7 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(shutDownCtx); err != nil {
-		log.Fatalf("Error shutting down server: %v", err)
+		logger.Error("Error shutting down server:", slog.String("error", err.Error()))
 	}
-
 
 }

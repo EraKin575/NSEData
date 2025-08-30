@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"server/models"
 	"sync"
@@ -12,7 +13,7 @@ import (
 
 // HandlePost streams `data` as SSE until `endTime`.
 // Uses a mutex for safe concurrent access to `data`.
-func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWMutex) http.HandlerFunc {
+func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWMutex, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Handle CORS and preflight request
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -33,7 +34,7 @@ func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWM
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
-			http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+			logger.Error("Streaming unsupported!")
 			return
 		}
 
@@ -51,7 +52,7 @@ func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWM
 			mu.RUnlock()
 
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Error marshalling data: %v", err), http.StatusInternalServerError)
+				logger.Error("Error marshalling records:", slog.String("error", err.Error())	)
 				return
 			}
 

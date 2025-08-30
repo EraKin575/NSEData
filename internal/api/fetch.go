@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
 	"server/models"
@@ -79,13 +79,14 @@ func getOptionChain() (models.OptionChain, error) {
 	return optionData, nil
 }
 
-func FetchData() (models.Records, error) {
+func FetchData(logger *slog.Logger) (models.Records, error) {
 	chain, err := getOptionChain()
 	if err != nil {
 		return models.Records{}, err
 	}
 
 	if len(chain.Records.ExpiryDates) < 2 {
+		logger.Error("Not enough expiry dates")
 		return models.Records{}, fmt.Errorf("not enough expiry dates")
 	}
 
@@ -100,7 +101,7 @@ func FetchData() (models.Records, error) {
 			PE:          entry.PE,
 			ExpiryDate:  entry.ExpiryDate,
 		}
-		
+
 		switch entry.ExpiryDate {
 		case firstExpiry:
 			expiryOneResult = append(expiryOneResult, data)
@@ -109,7 +110,7 @@ func FetchData() (models.Records, error) {
 		}
 	}
 
-	log.Printf("timestamp: %s, underlying value: %f", chain.Records.TimeStamp, chain.Records.UnderlyingValue)
+	logger.Info("Fetched data", slog.Int("records_first_expiry", len(expiryOneResult)), slog.Int("records_second_expiry", len(expiryTwoResult)))
 
 	result := append(expiryOneResult, expiryTwoResult...)
 	return models.Records{

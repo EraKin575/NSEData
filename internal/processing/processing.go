@@ -2,8 +2,7 @@ package processing
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"server/internal/api"
 	"server/internal/db"
@@ -15,7 +14,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayload, db *db.DB, loc *time.Location, mu *sync.RWMutex) {
+func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayload, db *db.DB, loc *time.Location, mu *sync.RWMutex, logger *slog.Logger) {
 	c := cron.New(
 		cron.WithLocation(loc),
 		cron.WithSeconds(), // allow seconds field in cron expression
@@ -29,20 +28,20 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 		resetTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 55, 0, 0, loc)
 
 		// Fetch fresh records
-		newRecords, err := api.FetchData()
+		newRecords, err := api.FetchData(logger)
 		if err != nil {
-			log.Println("records not fetched:", err)
+			logger.Error("Failed to fetch records:", slog.String("error", err.Error()))
 			return
 		}
 		if newRecords.TimeStamp == "" {
-			fmt.Println("Empty timestamp received")
+			logger.Error("Empty timestamp received")
 			return
 		}
 
 		// Ensure timestamp is valid and unique
 		timestampParts := strings.Split(newRecords.TimeStamp, " ")
 		if len(timestampParts) == 0 {
-			fmt.Println("Invalid timestamp format:", newRecords.TimeStamp)
+			logger.Error("Invalid timestamp format:", slog.String("timestamp", newRecords.TimeStamp))
 			return
 		}
 		datePart := timestampParts[0]
@@ -53,11 +52,10 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 			*records = append(*records, extractResponsePayload(newRecords)...)
 			mu.Unlock()
 			lastTimeStampRecorded = newRecords.TimeStamp
-			fmt.Printf("Record added! Total: %d\n", len(*records))
+			logger.InfoContext(ctx, "Record added successfully", slog.String("timestamp", newRecords.TimeStamp))
 		} else {
-			fmt.Printf("Record rejected - Date match: %t, Timestamp different: %t\n",
-				datePart == expectedDate,
-				lastTimeStampRecorded != newRecords.TimeStamp)
+			logger.InfoContext(ctx, "Duplicate or invalid timestamp, record not added", slog.String("timestamp", newRecords.TimeStamp))
+
 		}
 
 		if now.After(resetTime) {
@@ -65,12 +63,12 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 			*records = []models.ResponsePayload{}
 			mu.Unlock()
 			lastTimeStampRecorded = "" // reset timestamp
-			fmt.Println("Records reset at:", now)
+			logger.InfoContext(ctx, "Records reset for the next day")
 		}
 	})
 
 	if err != nil {
-		log.Fatalf("Failed to add fetch job: %v", err)
+		logger.Error("Failed to add fetch job:", slog.String("error", err.Error()))
 	}
 
 	_, err = c.AddFunc("0 40 15 * * MON-FRI", func() {
@@ -79,26 +77,26 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 		defer mu.RUnlock()
 
 		if len(*records) == 0 {
-			fmt.Println("No records to write at close")
+			logger.InfoContext(ctx, "No records to write at close")
 			return
 		}
 
 		if err := db.WriteToDB(ctx, *records); err != nil {
-			log.Println("Error writing to DB:", err)
+			logger.Error("Error writing to DB:", slog.String("error", err.Error()))
 		} else {
-			fmt.Println("Final data written to DB at:", now)
+			logger.InfoContext(ctx, "Final data written to DB", slog.String("time", now.String()))
 		}
 	})
 
 	if err != nil {
-		log.Fatalf("Failed to add final DB write job: %v", err)
+		logger.Error("Failed to add final DB write job:", slog.String("error", err.Error()))
 	}
 
 	c.Start()
 	defer c.Stop()
 
 	<-ctx.Done()
-	fmt.Println("Processing stopped")
+	logger.Debug("Processing stopped")
 }
 
 func extractResponsePayload(records models.Records) []models.ResponsePayload {
@@ -122,7 +120,6 @@ func extractResponsePayload(records models.Records) []models.ResponsePayload {
 			peLTP = record.PE.LastPrice
 		}
 
-		// Calculate metrics
 		pcr := calculatePCR(peOI, ceOI)
 		intradayPCR := calculatePCR(peChOI, ceChOI)
 		ceChOIPercentage := calculatePercentage(ceChOI, ceOI)
