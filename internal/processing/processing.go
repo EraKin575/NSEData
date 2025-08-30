@@ -21,15 +21,14 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 		cron.WithSeconds(), // allow seconds field in cron expression
 	)
 
-	writtenToDB := false
 	var lastTimeStampRecorded string
 
-	// Run every 3 minutes starting at 09:15 up to 15:39, Mon–Fri
+	// --- 1. Fetch job every 3 mins between 09:15 and 15:39 ---
 	_, err := c.AddFunc("0 15-39/3 9-15 * * MON-FRI", func() {
 		now := time.Now().In(loc)
 		resetTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 55, 0, 0, loc)
 
-		// Fetch new records
+		// Fetch fresh records
 		newRecords, err := api.FetchData()
 		if err != nil {
 			log.Println("records not fetched:", err)
@@ -40,16 +39,15 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 			return
 		}
 
+		// Ensure timestamp is valid and unique
 		timestampParts := strings.Split(newRecords.TimeStamp, " ")
 		if len(timestampParts) == 0 {
 			fmt.Println("Invalid timestamp format:", newRecords.TimeStamp)
 			return
 		}
-
 		datePart := timestampParts[0]
 		expectedDate := now.Format("02-Jan-2006")
 
-		// Only append new records if timestamp is unique for the same day
 		if datePart == expectedDate && lastTimeStampRecorded != newRecords.TimeStamp {
 			mu.Lock()
 			*records = append(*records, extractResponsePayload(newRecords)...)
@@ -62,37 +60,46 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 				lastTimeStampRecorded != newRecords.TimeStamp)
 		}
 
-		// Write once after market close
-		if !writtenToDB && now.Hour() == 15 && now.Minute() >= 40 {
-			if err := db.WriteToDB(ctx, *records); err != nil {
-				log.Println("Error writing to DB:", err)
-			}
-			writtenToDB = true
-			fmt.Println("Data written to DB at:", now)
-		}
-
-		// Reset records late at night
 		if now.After(resetTime) {
 			mu.Lock()
 			*records = []models.ResponsePayload{}
 			mu.Unlock()
-			writtenToDB = false
-			lastTimeStampRecorded = "" // also reset last timestamp
+			lastTimeStampRecorded = "" // reset timestamp
 			fmt.Println("Records reset at:", now)
 		}
 	})
 
 	if err != nil {
-		log.Fatalf("Failed to add cron job: %v", err)
+		log.Fatalf("Failed to add fetch job: %v", err)
+	}
+
+	_, err = c.AddFunc("0 40 15 * * MON-FRI", func() {
+		now := time.Now().In(loc)
+		mu.RLock()
+		defer mu.RUnlock()
+
+		if len(*records) == 0 {
+			fmt.Println("No records to write at close")
+			return
+		}
+
+		if err := db.WriteToDB(ctx, *records); err != nil {
+			log.Println("Error writing to DB:", err)
+		} else {
+			fmt.Println("Final data written to DB at:", now)
+		}
+	})
+
+	if err != nil {
+		log.Fatalf("Failed to add final DB write job: %v", err)
 	}
 
 	c.Start()
+	defer c.Stop()
+
 	<-ctx.Done()
 	fmt.Println("Processing stopped")
-	c.Stop()
 }
-
-// --- helpers ---
 
 func extractResponsePayload(records models.Records) []models.ResponsePayload {
 	var response []models.ResponsePayload
