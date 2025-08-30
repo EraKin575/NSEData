@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -28,6 +29,7 @@ func main() {
 	}
 
 	go func() {
+		fmt.Print("Starting server...")
 		serverErr := server.ListenAndServe()
 		if serverErr != nil {
 			return
