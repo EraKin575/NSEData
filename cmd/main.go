@@ -35,13 +35,13 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("Starting server on:", server.Addr)
+		logger.Info("Starting server on :8090")
 		serverErr := server.ListenAndServe()
 		if serverErr != nil {
 			return
 		}
 	}()
-	connString := os.Getenv("DATABASE_PUBLIC_URL")
+	connString := os.Getenv("DATABASE_URL")
 	if connString == "" {
 		connString = "postgres://optionuser:optionpass@localhost:5432/optionchain?sslmode=disable"
 	}
