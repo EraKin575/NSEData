@@ -27,36 +27,58 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 		now := time.Now().In(loc)
 		resetTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 55, 0, 0, loc)
 
-		// Fetch fresh records
-		newRecords, err := api.FetchData(logger)
-		if err != nil {
-			logger.Error("Failed to fetch records:", slog.String("error", err.Error()))
-			return
-		}
-		if newRecords.TimeStamp == "" {
-			logger.Error("Empty timestamp received")
-			return
-		}
-
-		// Ensure timestamp is valid and unique
-		timestampParts := strings.Split(newRecords.TimeStamp, " ")
-		if len(timestampParts) == 0 {
-			logger.Error("Invalid timestamp format:", slog.String("timestamp", newRecords.TimeStamp))
-			return
-		}
-		datePart := timestampParts[0]
+		var newRecords models.Records
+		maxRetries := 10
 		expectedDate := now.Format("02-Jan-2006")
 
-		if datePart == expectedDate && lastTimeStampRecorded != newRecords.TimeStamp {
-			mu.Lock()
-			*records = append(*records, extractResponsePayload(newRecords)...)
-			mu.Unlock()
-			lastTimeStampRecorded = newRecords.TimeStamp
-			logger.InfoContext(ctx, "Record added successfully", slog.String("timestamp", newRecords.TimeStamp))
-		} else {
-			logger.InfoContext(ctx, "Duplicate or invalid timestamp, record not added", slog.String("timestamp", newRecords.TimeStamp))
+		for i := 0; i < maxRetries; i++ {
+			rec, err := api.FetchData(logger)
+			if err != nil {
+				logger.Warn("Fetch failed, retrying...",
+					slog.Int("attempt", i+1),
+					slog.String("error", err.Error()))
+				time.Sleep(5 * time.Second)
+				continue
+			}
 
+			if rec.TimeStamp == "" {
+				logger.Warn("Empty timestamp received, retrying...",
+					slog.Int("attempt", i+1))
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			// Validate timestamp
+			parts := strings.Split(rec.TimeStamp, " ")
+			if len(parts) == 0 {
+				logger.Warn("Invalid timestamp format", slog.String("timestamp", rec.TimeStamp))
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			datePart := parts[0]
+			if datePart == expectedDate && lastTimeStampRecorded != rec.TimeStamp {
+				newRecords = rec
+				break // ✅ good data found
+			}
+
+			logger.Info("Duplicate timestamp, retrying...",
+				slog.Int("attempt", i+1),
+				slog.String("timestamp", rec.TimeStamp))
+			time.Sleep(5 * time.Second)
 		}
+
+		if newRecords.TimeStamp == "" {
+			logger.Error("No valid records after retries")
+			return
+		}
+
+		mu.Lock()
+		*records = append(*records, extractResponsePayload(newRecords)...)
+		mu.Unlock()
+		lastTimeStampRecorded = newRecords.TimeStamp
+		logger.InfoContext(ctx, "Record added successfully",
+			slog.String("timestamp", newRecords.TimeStamp))
 
 		if now.After(resetTime) {
 			mu.Lock()
