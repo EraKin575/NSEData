@@ -23,7 +23,7 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 	var lastTimeStampRecorded string
 
 	// --- 1. Fetch job every 3 mins between 09:15 and 15:39 ---
-	_, err := c.AddFunc("0 15-39/3 9-15 * * MON-FRI", func() {
+	_, err := c.AddFunc("0 15-59/3,0-39/3 9-15 * * MON-FRI", func() {
 		now := time.Now().In(loc)
 		resetTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 55, 0, 0, loc)
 
@@ -31,7 +31,7 @@ func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayloa
 		maxRetries := 10
 		expectedDate := now.Format("02-Jan-2006")
 
-		for i := 0; i < maxRetries; i++ {
+		for i := range maxRetries {
 			rec, err := api.FetchData(logger)
 			if err != nil {
 				logger.Warn("Fetch failed, retrying...",
