@@ -28,7 +28,7 @@ func main() {
 	logger := initLogger()
 	defer stop()
 
-	var records *[]models.ResponsePayload
+	records := &[]models.ResponsePayload{}
 
 	mu := &sync.RWMutex{}
 	loc, err := time.LoadLocation("Asia/Kolkata")
