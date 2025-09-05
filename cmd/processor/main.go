@@ -62,7 +62,7 @@ func main() {
 		logger.Error("Failed to connect to DB:", slog.String("error", err.Error()))
 	}
 
-	redisAddr := os.Getenv("REDIS_ADDR")
+	redisAddr := os.Getenv("REDIS_URL")
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
 	}
