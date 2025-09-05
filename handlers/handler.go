@@ -6,7 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
-	"server/models"
+	"server/internal/models"
 	"sync"
 	"time"
 )

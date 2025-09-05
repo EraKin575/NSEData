@@ -1,13 +1,12 @@
-package api
+package fetcher
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
-	"server/models"
+	"server/internal/models"
 	"time"
 )
 
@@ -43,7 +42,7 @@ func setCookies() error {
 	}
 	defer resp.Body.Close()
 
-	_, _ = io.ReadAll(resp.Body) // Needed to populate cookies
+	_, _ = io.ReadAll(resp.Body) // needed to populate cookies
 	return nil
 }
 
@@ -79,44 +78,10 @@ func getOptionChain() (models.OptionChain, error) {
 	return optionData, nil
 }
 
-func FetchData(logger *slog.Logger) (models.Records, error) {
-	chain, err := getOptionChain()
-	if err != nil {
-		return models.Records{}, err
+func isMarketHoliday(date time.Time, loc *time.Location) bool {
+	if date.In(loc).Weekday() == time.Saturday || date.In(loc).Weekday() == time.Sunday {
+		return true
 	}
 
-	if len(chain.Records.ExpiryDates) < 2 {
-		logger.Error("Not enough expiry dates")
-		return models.Records{}, fmt.Errorf("not enough expiry dates")
-	}
-
-	firstExpiry := chain.Records.ExpiryDates[0]
-	secondExpiry := chain.Records.ExpiryDates[1]
-
-	var expiryOneResult, expiryTwoResult []models.OptionData
-	for _, entry := range chain.Records.Data {
-		data := models.OptionData{
-			StrikePrice: entry.StrikePrice,
-			CE:          entry.CE,
-			PE:          entry.PE,
-			ExpiryDate:  entry.ExpiryDate,
-		}
-
-		switch entry.ExpiryDate {
-		case firstExpiry:
-			expiryOneResult = append(expiryOneResult, data)
-		case secondExpiry:
-			expiryTwoResult = append(expiryTwoResult, data)
-		}
-	}
-
-	logger.Info("Fetched data", slog.Int("records_first_expiry", len(expiryOneResult)), slog.Int("records_second_expiry", len(expiryTwoResult)))
-
-	result := append(expiryOneResult, expiryTwoResult...)
-	return models.Records{
-		ExpiryDates:     []string{firstExpiry, secondExpiry},
-		Data:            result,
-		TimeStamp:       chain.Records.TimeStamp,
-		UnderlyingValue: chain.Records.UnderlyingValue,
-	}, nil
+	return false
 }
