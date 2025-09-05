@@ -1,36 +1,21 @@
 {
-  "project": {
-    "name": "nifty-option-chain"
-  },
+  "project": { "name": "nifty-option-chain" },
   "services": [
     {
       "name": "fetcher",
       "type": "docker",
       "dockerfilePath": "deployments/fetcher.Dockerfile",
-      "env": {
-        "REDIS_URL": "@redis",
-        "TZ": "Asia/Kolkata"
-      }
+      "env": { "REDIS_URL": "@redis", "TZ": "Asia/Kolkata" }
     },
     {
       "name": "processor",
       "type": "docker",
-      "dockerfilePath": "deployments/processor.Dockerfile",
-      "env": {
-        "REDIS_URL": "@redis",
-        "DATABASE_URL": "@postgres",
-        "TZ": "Asia/Kolkata"
-      }
+      "dockerfilePath": "deployments/processing.Dockerfile",
+      "env": { "REDIS_URL": "@redis", "DATABASE_URL": "@postgres", "TZ": "Asia/Kolkata" }
     }
   ],
   "plugins": [
-    {
-      "name": "redis",
-      "type": "redis"
-    },
-    {
-      "name": "postgres",
-      "type": "postgres"
-    }
+    { "name": "redis", "type": "redis" },
+    { "name": "postgres", "type": "postgres" }
   ]
 }
