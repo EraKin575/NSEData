@@ -12,7 +12,7 @@ RUN go mod download
 COPY . .
 
 # Build static binary
-RUN CGO_ENABLED=0 go build -o processing ./cmd/processing/main.go
+RUN CGO_ENABLED=0 go build -o processing ./cmd/processor/main.go
 
 # Stage 2: Run
 FROM alpine:latest
