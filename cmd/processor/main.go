@@ -73,7 +73,8 @@ func main() {
 
 	reader := processing.NewStreamReader(redisClient, "nifty50:option_chain")
 	processingService := &processing.ProcessingService{
-		Reader: reader,
+		Reader:   reader,
+		DBWriter: db,
 	}
 
 	if err := processingService.ProcessingOptionChain(ctx, db, mu, logger, records); err != nil {
