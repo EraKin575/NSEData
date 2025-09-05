@@ -10,115 +10,81 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/robfig/cron/v3"
 )
 
 func ProcessingOptionChain(ctx context.Context, records *[]models.ResponsePayload, db *db.DB, loc *time.Location, mu *sync.RWMutex, logger *slog.Logger) {
-	c := cron.New(
-		cron.WithLocation(loc),
-		cron.WithSeconds(), // allow seconds field in cron expression
-	)
-
 	var lastTimeStampRecorded string
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
+	isWrittenToDB := false
 
-	// --- 1. Fetch job every 3 mins between 09:15 and 15:39 ---
-	_, err := c.AddFunc("0 15-59/3,0-39/3 9-15 * * MON-FRI", func() {
-		now := time.Now().In(loc)
-		resetTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 55, 0, 0, loc)
-
-		var newRecords models.Records
-		maxRetries := 10
-		expectedDate := now.Format("02-Jan-2006")
-
-		for i := range maxRetries {
-			rec, err := api.FetchData(logger)
-			if err != nil {
-				logger.Warn("Fetch failed, retrying...",
-					slog.Int("attempt", i+1),
-					slog.String("error", err.Error()))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			if rec.TimeStamp == "" {
-				logger.Warn("Empty timestamp received, retrying...",
-					slog.Int("attempt", i+1))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			// Validate timestamp
-			parts := strings.Split(rec.TimeStamp, " ")
-			if len(parts) == 0 {
-				logger.Warn("Invalid timestamp format", slog.String("timestamp", rec.TimeStamp))
-				time.Sleep(5 * time.Second)
-				continue
-			}
-
-			datePart := parts[0]
-			if datePart == expectedDate && lastTimeStampRecorded != rec.TimeStamp {
-				newRecords = rec
-				break // ✅ good data found
-			}
-
-			logger.Info("Duplicate timestamp, retrying...",
-				slog.Int("attempt", i+1),
-				slog.String("timestamp", rec.TimeStamp))
-			time.Sleep(5 * time.Second)
-		}
-
-		if newRecords.TimeStamp == "" {
-			logger.Error("No valid records after retries")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Gracefully shutdown through context cancellation")
 			return
-		}
+		case <-ticker.C:
+			maxRetries := 10
+			now := time.Now().In(loc)
 
-		mu.Lock()
-		*records = append(*records, extractResponsePayload(newRecords)...)
-		mu.Unlock()
-		lastTimeStampRecorded = newRecords.TimeStamp
-		logger.InfoContext(ctx, "Record added successfully",
-			slog.String("timestamp", newRecords.TimeStamp))
+			startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, loc)
+			endTime := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, loc)
 
-		if now.After(resetTime) {
+			// 🔄 reset on new day
+			currentDate := now.Format("02-Jan-2006")
+			if lastTimeStampRecorded != currentDate {
+				mu.Lock()
+				*records = []models.ResponsePayload{}
+				mu.Unlock()
+
+				lastTimeStampRecorded = currentDate
+				isWrittenToDB = false
+				logger.Info("New trading day detected. Cleared previous records.")
+			}
+
+			if now.Before(startTime) {
+				logger.Info("Market not started yet. Waiting for market to open.")
+				continue
+			} else if now.After(endTime) {
+				logger.Info("Market closed. Stopping data fetch.")
+				if !isWrittenToDB {
+					err := db.WriteToDB(ctx, *records)
+					if err != nil {
+						logger.Error("Failed to write to database", slog.Any("error", err))
+						continue
+					}
+					isWrittenToDB = true
+				}
+				continue
+			}
+
+			if isMarketHoliday(now, loc) {
+				logger.Info("Market is closed today. Skipping data fetch.")
+				continue
+			}
+
+			var newRecords models.Records
+			for range maxRetries {
+				var recordFetchError error
+				newRecords, recordFetchError = api.FetchData(logger)
+				if recordFetchError != nil {
+					logger.Error("Failed to fetch data", slog.Any("error", recordFetchError))
+				}
+				datePart := strings.Split(newRecords.TimeStamp, " ")[0]
+				if now.Format("02-Jan-2006") != datePart {
+					newRecords = models.Records{}
+				} else {
+					break
+				}
+			}
+
+			responsePayload := extractResponsePayload(newRecords)
+
 			mu.Lock()
-			*records = []models.ResponsePayload{}
+			*records = append(*records, responsePayload...)
 			mu.Unlock()
-			lastTimeStampRecorded = "" // reset timestamp
-			logger.InfoContext(ctx, "Records reset for the next day")
 		}
-	})
-
-	if err != nil {
-		logger.Error("Failed to add fetch job:", slog.String("error", err.Error()))
 	}
-
-	_, err = c.AddFunc("0 40 15 * * MON-FRI", func() {
-		now := time.Now().In(loc)
-		mu.RLock()
-		defer mu.RUnlock()
-
-		if len(*records) == 0 {
-			logger.InfoContext(ctx, "No records to write at close")
-			return
-		}
-
-		if err := db.WriteToDB(ctx, *records); err != nil {
-			logger.Error("Error writing to DB:", slog.String("error", err.Error()))
-		} else {
-			logger.InfoContext(ctx, "Final data written to DB", slog.String("time", now.String()))
-		}
-	})
-
-	if err != nil {
-		logger.Error("Failed to add final DB write job:", slog.String("error", err.Error()))
-	}
-
-	c.Start()
-	defer c.Stop()
-
-	<-ctx.Done()
-	logger.Debug("Processing stopped")
 }
 
 func extractResponsePayload(records models.Records) []models.ResponsePayload {
