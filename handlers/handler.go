@@ -9,10 +9,9 @@ import (
 	"server/internal/models"
 	"sync"
 	"time"
+
 )
 
-// HandlePost streams `data` as SSE until `endTime`.
-// Uses a mutex for safe concurrent access to `data`.
 func HandlePost(data *[]models.ResponsePayload, loc *time.Location, mu *sync.RWMutex, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Handle CORS and preflight request
