@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"server/models"
+	"server/internal/models"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -83,10 +83,10 @@ func NewDB(ctx context.Context, connString string) (*DB, error) {
 }
 
 // Writes option chain records to DB
-func (db *DB) WriteToDB(ctx context.Context, records []models.ResponsePayload) error {
+func (db *DB) WriteToDB(ctx context.Context, records *[]models.ResponsePayload) error {
 	batch := &pgx.Batch{}
 
-	for _, p := range records {
+	for _, p := range *records {
 		batch.Queue(`
 			INSERT INTO option_chain_snapshots (
 				timestamp, expiry_date, strike_price, underlying_value,
