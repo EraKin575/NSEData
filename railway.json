@@ -1,5 +1,5 @@
 {
-  "project": { "name": "nifty-option-chain" },
+  "project": { "name": "market-trend-analyzer" },
   "services": [
     {
       "name": "fetcher",
