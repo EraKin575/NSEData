@@ -6,7 +6,7 @@
     {
       "name": "fetcher",
       "type": "docker",
-      "dockerfilePath": "fetcher/Dockerfile",
+      "dockerfilePath": "deployments/fetcher.Dockerfile",
       "env": {
         "REDIS_URL": "@redis",
         "TZ": "Asia/Kolkata"
@@ -15,7 +15,7 @@
     {
       "name": "processor",
       "type": "docker",
-      "dockerfilePath": "processor/Dockerfile",
+      "dockerfilePath": "deployments/processor.Dockerfile",
       "env": {
         "REDIS_URL": "@redis",
         "DATABASE_URL": "@postgres",
