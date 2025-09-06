@@ -77,10 +77,12 @@ func main() {
 		DBWriter: db,
 	}
 
+	mux.HandleFunc("/api/data", handlers.HandlePost(records, loc, mu, logger))
+
 	if err := processingService.ProcessingOptionChain(ctx, db, mu, logger, records); err != nil {
 		logger.Error("Failed to process data", slog.String("err", err.Error()))
 	}
-	mux.HandleFunc("/api/data", handlers.HandlePost(records, loc, mu, logger))
+	
 
 	<-ctx.Done()
 	logger.Info("Shutting down gracefully...")
