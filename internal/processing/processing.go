@@ -38,10 +38,13 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 			endTime := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, loc)
 
 			currentDate := now.Format("02-Jan-2006")
+
 			if lastTimeStampRecorded != currentDate {
-				mu.Lock()
-				*records = []models.ResponsePayload{}
-				mu.Unlock()
+				if lastTimeStampRecorded != "" {
+					mu.Lock()
+					*records = []models.ResponsePayload{}
+					mu.Unlock()
+				}
 
 				lastTimeStampRecorded = currentDate
 				isWrittenToDB = false
