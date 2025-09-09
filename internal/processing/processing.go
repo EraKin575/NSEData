@@ -25,12 +25,16 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 		return err
 	}
 
+	// Add ticker to prevent tight loop and reduce CPU usage
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("Gracefully shutdown through context cancellation")
 			return nil
-		default:
+		case <-ticker.C:
 			maxRetries := 10
 			now := time.Now().In(loc)
 
@@ -73,12 +77,15 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 			}
 
 			var newRecords models.Records
-			for range maxRetries {
-				var recordFetchError error
-				if len(*records) == 0 {
+			var recordFetchError error
+
+			for attempt := range maxRetries {
+				// Initialize stream only if records are empty and it's the first attempt
+				if len(*records) == 0 && attempt == 0 {
 					data, err := r.Reader.ReadStream(ctx)
 					if err != nil {
-						logger.Error("Failed to fetch data", slog.Any("error", err))
+						logger.Error("Failed to fetch stream data", slog.Any("error", err))
+						time.Sleep(10 * time.Second)
 						continue
 					}
 					if len(data) == 0 {
@@ -87,23 +94,37 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 						continue
 					}
 				}
+
 				newRecords, recordFetchError = r.Reader.ReadLatest(ctx)
 				if recordFetchError != nil {
 					logger.Error("Failed to fetch data", slog.Any("error", recordFetchError))
+					time.Sleep(10 * time.Second)
+					continue
 				}
-				datePart := strings.Split(newRecords.TimeStamp, " ")[0]
-				if now.Format("02-Jan-2006") != datePart {
-					newRecords = models.Records{}
-				} else {
-					break
+
+				// Validate timestamp
+				if newRecords.TimeStamp != "" {
+					datePart := strings.Split(newRecords.TimeStamp, " ")[0]
+					if now.Format("02-Jan-2006") == datePart {
+						break // Successfully got valid data
+					}
+				}
+
+				newRecords = models.Records{}
+				if attempt == maxRetries-1 {
+					logger.Warn("Max retries reached, no valid data found")
 				}
 			}
 
-			responsePayload := extractResponsePayload(newRecords)
-
-			mu.Lock()
-			*records = append(*records, responsePayload...)
-			mu.Unlock()
+			if newRecords.TimeStamp != "" {
+				responsePayload := extractResponsePayload(newRecords)
+				if len(responsePayload) > 0 {
+					mu.Lock()
+					*records = append(*records, responsePayload...)
+					mu.Unlock()
+					logger.Info("Added new records", slog.Int("count", len(responsePayload)))
+				}
+			}
 		}
 	}
 }
