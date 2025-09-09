@@ -18,20 +18,55 @@ func initLogger() *slog.Logger {
 	return slog.New(handler)
 }
 
+func initRedis(logger *slog.Logger) *goredis.Client {
+	redisURL := os.Getenv("REDIS_URL")
+	var client *goredis.Client
+
+	switch {
+	case redisURL == "":
+		// Local fallback
+		client = goredis.NewClient(&goredis.Options{
+			Addr: "localhost:6379",
+		})
+
+	case len(redisURL) >= 8 && redisURL[:8] == "redis://":
+		// Railway style URL
+		opt, err := goredis.ParseURL(redisURL)
+		if err != nil {
+			logger.Error("Failed to parse Redis URL", slog.String("err", err.Error()))
+			os.Exit(1)
+		}
+		client = goredis.NewClient(opt)
+
+	default:
+		// Assume host:port only
+		client = goredis.NewClient(&goredis.Options{
+			Addr: redisURL,
+		})
+	}
+
+	// Test connection
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		logger.Error("Failed to connect to Redis", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+
+	logger.Info("Connected to Redis")
+	return client
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	logger := initLogger()
 
-	redisAddr := os.Getenv("REDIS_URL")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}	
-
-	redisClient := goredis.NewClient(&goredis.Options{
-		Addr: redisAddr,
-	})
+	redisClient := initRedis(logger)
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Error("Failed to close Redis", slog.String("err", err.Error()))
+		}
+	}()
 
 	writer := fetcher.NewStreamWriter(redisClient, "nifty50:option_chain")
 	fetcherService := &fetcher.FetcherService{
@@ -46,14 +81,9 @@ func main() {
 	<-ctx.Done()
 	logger.Info("Shutting down gracefully...")
 
-	// Graceful shutdown context (if you had cleanup tasks)
+	// Graceful shutdown context
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	// Example cleanup: close Redis
-	if err := redisClient.Close(); err != nil {
-		logger.Error("Failed to close Redis", slog.String("err", err.Error()))
-	}
 
 	<-shutdownCtx.Done()
 }
