@@ -28,4 +28,6 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 RUN adduser -D appuser
 USER appuser
 
+EXPOSE 8090
+
 CMD ["./processing"]

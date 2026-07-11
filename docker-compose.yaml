@@ -1,12 +1,24 @@
 version: '3.9'
 
 services:
-  api:
-    build: .
-    container_name: optionchain-api
+  fetcher:
+    build:
+      context: .
+      dockerfile: internal/fetcher/fetcher.Dockerfile
+    container_name: optionchain-fetcher
     restart: always
     environment:
-      DATABASE_URL: "${{Postgres-0erQ.DATABASE_URL}}"
-      PORT: "4300"
+      REDIS_URL: "${REDIS_URL}"
+
+  processor:
+    build:
+      context: .
+      dockerfile: internal/processing/processing.Dockerfile
+    container_name: optionchain-processor
+    restart: always
+    environment:
+      REDIS_URL: "${REDIS_URL}"
+      DATABASE_URL: "${DATABASE_URL}"
+      PORT: "${PORT:-8090}"
     ports:
-      - "4300:4300"
+      - "${PORT:-8090}:${PORT:-8090}"

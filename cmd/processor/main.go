@@ -73,14 +73,24 @@ func main() {
 		return
 	}
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8090"
+	}
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
 	server := http.Server{
-		Addr:    ":8090",
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 
 	go func() {
-		logger.Info("Starting server on :8090")
+		logger.Info("Starting server", slog.String("port", port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("Server error", slog.String("err", err.Error()))
 		}
