@@ -13,7 +13,7 @@ type FetcherService struct {
 }
 
 const (
-	preOpenPollIcomminterval = 1 * time.Second
+	preOpenPollInterval = 1 * time.Second
 	marketPollInterval  = 3 * time.Minute
 )
 
