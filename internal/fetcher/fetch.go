@@ -12,15 +12,25 @@ type FetcherService struct {
 	Writer Writer
 }
 
-func (fs *FetcherService) FetchData(ctx context.Context, logger *slog.Logger) error {
-	ticker := time.NewTicker(3 * time.Minute)
-	defer ticker.Stop()
+const (
+	preOpenPollIcomminterval = 1 * time.Second
+	marketPollInterval  = 3 * time.Minute
+)
 
+func (fs *FetcherService) FetchData(ctx context.Context, logger *slog.Logger) error {
 	loc, err := time.LoadLocation("Asia/Kolkata")
 	if err != nil {
 		logger.Error("Failed to load location", slog.String("err", err.Error()))
 		return err
 	}
+
+	currentInterval := marketPollInterval
+	if now := time.Now().In(loc); shouldPollFast(now, loc) {
+		currentInterval = preOpenPollInterval
+	}
+
+	ticker := time.NewTicker(currentInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -36,6 +46,15 @@ func (fs *FetcherService) FetchData(ctx context.Context, logger *slog.Logger) er
 			resetTime := time.Date(now.Year(), now.Month(), now.Day(), 23, 0, 0, 0, loc)
 			currentDate := now.Format("02-Jan-2006")
 
+			desiredInterval := marketPollInterval
+			if shouldPollFast(now, loc) {
+				desiredInterval = preOpenPollInterval
+			}
+			if desiredInterval != currentInterval {
+				ticker.Reset(desiredInterval)
+				currentInterval = desiredInterval
+			}
+
 			// Market closed today
 			if isMarketHoliday(now, loc) {
 				logger.Info("Market is closed today. Skipping data fetch.")
@@ -44,7 +63,7 @@ func (fs *FetcherService) FetchData(ctx context.Context, logger *slog.Logger) er
 
 			// Before market open
 			if now.Before(startTime) {
-				logger.Info("Market not started yet. Waiting for market to open.")
+				logger.Debug("Market not started yet. Waiting for market to open.")
 				continue
 			}
 
@@ -140,4 +159,16 @@ func (fs *FetcherService) FetchData(ctx context.Context, logger *slog.Logger) er
 			logger.Info("Successfully wrote data to stream")
 		}
 	}
+}
+
+// shouldPollFast reports whether the fetcher should poll every second
+// rather than every 3 minutes: only on trading days, before market open,
+// so we catch the 9:15 open promptly without spinning all day on
+// weekends/holidays or during the rest of the trading day.
+func shouldPollFast(now time.Time, loc *time.Location) bool {
+	if isMarketHoliday(now, loc) {
+		return false
+	}
+	startTime := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, loc)
+	return now.Before(startTime)
 }
