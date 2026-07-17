@@ -26,7 +26,7 @@ type Option struct {
 
 type OptionData struct {
 	StrikePrice float64 `json:"strikePrice"`
-	ExpiryDate  string  `json:"expiryDate"`
+	ExpiryDate  string  `json:"expiryDates"`
 	CE          *Option `json:"CE,omitempty"`
 	PE          *Option `json:"PE,omitempty"`
 }
