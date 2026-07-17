@@ -87,49 +87,69 @@ func getOptionChain() (models.OptionChain, error) {
 		return models.OptionChain{}, fmt.Errorf("failed to parse contract info: %w", err)
 	}
 
-	if len(contractData.ExpiryDates) == 0 {
-		return models.OptionChain{}, fmt.Errorf("no expiry dates available")
+	if len(contractData.ExpiryDates) < 2 {
+		return models.OptionChain{}, fmt.Errorf("not enough expiry dates available")
 	}
 
 	firstExpiry := contractData.ExpiryDates[0]
-	url := fmt.Sprintf("https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=%s", firstExpiry)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return models.OptionChain{}, err
-	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
+	secondExpiry := contractData.ExpiryDates[1]
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return models.OptionChain{}, fmt.Errorf("failed to fetch data: %w", err)
-	}
-	defer resp.Body.Close()
+	var allData []models.OptionData
+	var allExpiryDates []string
 
-	if resp.StatusCode != http.StatusOK {
-		return models.OptionChain{}, fmt.Errorf("NSE returned HTTP %d %s", resp.StatusCode, resp.Status)
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.Contains(contentType, "application/json") {
-		return models.OptionChain{}, fmt.Errorf("unexpected content-type: %s", contentType)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return models.OptionChain{}, err
-	}
-
-	var optionData models.OptionChain
-	if err := json.Unmarshal(body, &optionData); err != nil {
-		preview := string(body)
-		if len(preview) > 200 {
-			preview = preview[:200]
+	for _, expiry := range []string{firstExpiry, secondExpiry} {
+		url := fmt.Sprintf("https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=%s", expiry)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return models.OptionChain{}, err
 		}
-		return models.OptionChain{}, fmt.Errorf("json unmarshal failed: %w | body preview: %s", err, preview)
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return models.OptionChain{}, fmt.Errorf("failed to fetch data for expiry %s: %w", expiry, err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return models.OptionChain{}, fmt.Errorf("NSE returned HTTP %d %s for expiry %s", resp.StatusCode, resp.Status, expiry)
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "application/json") {
+			resp.Body.Close()
+			return models.OptionChain{}, fmt.Errorf("unexpected content-type: %s", contentType)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return models.OptionChain{}, err
+		}
+
+		var optionData models.OptionChain
+		if err := json.Unmarshal(body, &optionData); err != nil {
+			preview := string(body)
+			if len(preview) > 200 {
+				preview = preview[:200]
+			}
+			return models.OptionChain{}, fmt.Errorf("json unmarshal failed for expiry %s: %w | body preview: %s", expiry, err, preview)
+		}
+
+		allData = append(allData, optionData.Records.Data...)
+		allExpiryDates = append(allExpiryDates, optionData.Records.ExpiryDates...)
 	}
-	return optionData, nil
+
+	return models.OptionChain{
+		Records: models.Records{
+			ExpiryDates:     allExpiryDates,
+			Data:            allData,
+			TimeStamp:       "",
+			UnderlyingValue: 0,
+		},
+	}, nil
 }
 
 func isMarketHoliday(date time.Time, loc *time.Location) bool {
