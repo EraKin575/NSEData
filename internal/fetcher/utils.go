@@ -56,7 +56,43 @@ func getOptionChain() (models.OptionChain, error) {
 		return models.OptionChain{}, fmt.Errorf("cookie setup failed: %w", err)
 	}
 
-	url := "https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY"
+	contractInfoURL := "https://www.nseindia.com/api/option-chain-contract-info?symbol=NIFTY&type=Indices"
+	contractReq, err := http.NewRequest("GET", contractInfoURL, nil)
+	if err != nil {
+		return models.OptionChain{}, err
+	}
+	for k, v := range headers {
+		contractReq.Header.Set(k, v)
+	}
+
+	contractResp, err := client.Do(contractReq)
+	if err != nil {
+		return models.OptionChain{}, fmt.Errorf("failed to fetch contract info: %w", err)
+	}
+	defer contractResp.Body.Close()
+
+	if contractResp.StatusCode != http.StatusOK {
+		return models.OptionChain{}, fmt.Errorf("contract info: NSE returned HTTP %d %s", contractResp.StatusCode, contractResp.Status)
+	}
+
+	contractBody, err := io.ReadAll(contractResp.Body)
+	if err != nil {
+		return models.OptionChain{}, err
+	}
+
+	var contractData struct {
+		ExpiryDates []string `json:"expiryDates"`
+	}
+	if err := json.Unmarshal(contractBody, &contractData); err != nil {
+		return models.OptionChain{}, fmt.Errorf("failed to parse contract info: %w", err)
+	}
+
+	if len(contractData.ExpiryDates) == 0 {
+		return models.OptionChain{}, fmt.Errorf("no expiry dates available")
+	}
+
+	firstExpiry := contractData.ExpiryDates[0]
+	url := fmt.Sprintf("https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=%s", firstExpiry)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return models.OptionChain{}, err
