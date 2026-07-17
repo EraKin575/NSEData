@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"server/internal/models"
+	"strings"
 	"time"
 )
 
@@ -42,6 +43,10 @@ func setCookies() error {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("cookie setup: NSE returned HTTP %d %s", resp.StatusCode, resp.Status)
+	}
+
 	_, _ = io.ReadAll(resp.Body) // needed to populate cookies
 	return nil
 }
@@ -66,6 +71,15 @@ func getOptionChain() (models.OptionChain, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return models.OptionChain{}, fmt.Errorf("NSE returned HTTP %d %s", resp.StatusCode, resp.Status)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		return models.OptionChain{}, fmt.Errorf("unexpected content-type: %s", contentType)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return models.OptionChain{}, err
@@ -73,7 +87,11 @@ func getOptionChain() (models.OptionChain, error) {
 
 	var optionData models.OptionChain
 	if err := json.Unmarshal(body, &optionData); err != nil {
-		return models.OptionChain{}, err
+		preview := string(body)
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return models.OptionChain{}, fmt.Errorf("json unmarshal failed: %w | body preview: %s", err, preview)
 	}
 	return optionData, nil
 }
