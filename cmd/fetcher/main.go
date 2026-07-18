@@ -72,6 +72,7 @@ func main() {
 	fetcherService := &fetcher.FetcherService{
 		Writer: writer,
 	}
+	defer fetcher.CloseBrowser()
 
 	if err := fetcherService.FetchData(ctx, logger); err != nil {
 		logger.Error("Failed to fetch data", slog.String("err", err.Error()))

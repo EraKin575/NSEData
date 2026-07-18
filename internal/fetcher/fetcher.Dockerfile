@@ -18,6 +18,10 @@ RUN CGO_ENABLED=0 go build -o fetcher ./cmd/fetcher/main.go
 FROM alpine:latest
 WORKDIR /app
 
+# Headless Chrome for the chromedp-based fetcher
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
+ENV CHROME_PATH=/usr/bin/chromium-browser
+
 # Copy binary
 COPY --from=builder /app/fetcher .
 
