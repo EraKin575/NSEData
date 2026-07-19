@@ -104,6 +104,7 @@ func main() {
 	db, err := db.NewDB(ctx, connString)
 	if err != nil {
 		logger.Error("Failed to connect to DB", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	// --- Redis setup ---

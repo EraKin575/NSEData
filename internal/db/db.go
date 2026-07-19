@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"server/internal/models"
 	"sync"
 
@@ -65,15 +64,13 @@ func NewDB(ctx context.Context, connString string) (*DB, error) {
 	pgOnce.Do(func() {
 		pool, e := pgxpool.New(ctx, connString)
 		if e != nil {
-			log.Fatal("Unable to connect to database:", e)
-			err = e
+			err = fmt.Errorf("unable to connect to database: %w", e)
 			return
 		}
 
 		// Initialize table automatically
 		if e := InitOptionChainSnapshotsTable(ctx, pool); e != nil {
-			log.Fatal("Failed to initialize table:", e)
-			err = e
+			err = fmt.Errorf("failed to initialize table: %w", e)
 			return
 		}
 
