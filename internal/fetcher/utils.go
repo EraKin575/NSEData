@@ -22,51 +22,62 @@ const (
 	navigationTimeout = 30 * time.Second
 )
 
-var (
-	browserOnce   sync.Once
-	browserCtx    context.Context
-	browserCancel context.CancelFunc
+// Browser is a single long-lived headless Chrome instance (and one tab) kept
+// alive for the life of the process. Re-fetching NSE's session cookies
+// requires a full page load, which is far too slow to redo on every poll
+// tick (as often as once a second before market open), so the tab is reused
+// and cookies are only refreshed periodically.
+type Browser struct {
+	ctx    context.Context
+	cancel context.CancelFunc
 
-	sessionMu sync.Mutex
+	mu        sync.Mutex
 	cookiesAt time.Time
-)
-
-// browser lazily starts a single long-lived headless Chrome instance and
-// keeps it (and one tab) alive for the life of the process. Re-fetching
-// NSE's session cookies requires a full page load, which is far too slow to
-// redo on every poll tick (as often as once a second before market open), so
-// the tab is reused and cookies are only refreshed periodically.
-func browser() context.Context {
-	browserOnce.Do(func() {
-		opts := append(chromedp.DefaultExecAllocatorOptions[:],
-			chromedp.UserAgent(userAgent),
-			chromedp.Flag("headless", true),
-			chromedp.Flag("disable-gpu", true),
-			chromedp.Flag("no-sandbox", true),
-			chromedp.Flag("disable-dev-shm-usage", true),
-		)
-		if execPath := os.Getenv("CHROME_PATH"); execPath != "" {
-			opts = append(opts, chromedp.ExecPath(execPath))
-		}
-
-		allocCtx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
-		browserCtx, browserCancel = chromedp.NewContext(allocCtx)
-
-		// The first Run on a fresh chromedp context allocates the browser and
-		// binds its lifetime to whatever context that call used; cancelling a
-		// context.WithTimeout wrapper afterwards would tear the whole browser
-		// down (see the chromedp.Run docs). So bootstrap it here once, with
-		// the bare uncancelled browserCtx, before any timeout-wrapped calls.
-		_ = chromedp.Run(browserCtx)
-	})
-	return browserCtx
 }
 
-// CloseBrowser shuts down the shared headless Chrome instance. Should be
-// called once on process shutdown.
-func CloseBrowser() {
-	if browserCancel != nil {
-		browserCancel()
+// NewBrowser launches the shared headless Chrome instance. Callers own the
+// returned Browser and must call Close on it during shutdown.
+func NewBrowser() *Browser {
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.UserAgent(userAgent),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+	)
+	if execPath := os.Getenv("CHROME_PATH"); execPath != "" {
+		opts = append(opts, chromedp.ExecPath(execPath))
+	}
+
+	allocCtx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
+	ctx, cancel := chromedp.NewContext(allocCtx)
+
+	// The first Run on a fresh chromedp context allocates the browser and
+	// binds its lifetime to whatever context that call used; cancelling a
+	// context.WithTimeout wrapper afterwards would tear the whole browser
+	// down (see the chromedp.Run docs). So bootstrap it here once, with the
+	// bare uncancelled ctx, before any timeout-wrapped calls.
+	_ = chromedp.Run(ctx)
+
+	return &Browser{ctx: ctx, cancel: cancel}
+}
+
+// Close shuts down the shared headless Chrome instance. Should be called
+// once on process shutdown.
+func (b *Browser) Close() {
+	b.cancel()
+}
+
+// withDeadline bounds a chromedp call by timeout while keeping it tied to
+// the shared browser tab's context (chromedp.Run requires that
+// association), but also aborts promptly if the caller's ctx is cancelled -
+// e.g. on process shutdown - instead of running out the full timeout.
+func (b *Browser) withDeadline(caller context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(b.ctx, timeout)
+	stop := context.AfterFunc(caller, cancel)
+	return ctx, func() {
+		stop()
+		cancel()
 	}
 }
 
@@ -74,18 +85,18 @@ func CloseBrowser() {
 // its session cookies, staying on-origin so subsequent in-page fetch() calls
 // carry them the same way the real site's own JS does. force bypasses the TTL,
 // used when a fetch comes back looking like a bot-check page rather than JSON.
-func refreshSession(force bool) error {
-	sessionMu.Lock()
-	defer sessionMu.Unlock()
+func (b *Browser) refreshSession(ctx context.Context, force bool) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	if !force && time.Since(cookiesAt) < cookieRefreshTTL {
+	if !force && time.Since(b.cookiesAt) < cookieRefreshTTL {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(browser(), navigationTimeout)
+	runCtx, cancel := b.withDeadline(ctx, navigationTimeout)
 	defer cancel()
 
-	if err := chromedp.Run(ctx,
+	if err := chromedp.Run(runCtx,
 		chromedp.Navigate(optionChainPage),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Sleep(2*time.Second),
@@ -93,15 +104,15 @@ func refreshSession(force bool) error {
 		return fmt.Errorf("failed to set cookies: %w", err)
 	}
 
-	cookiesAt = time.Now()
+	b.cookiesAt = time.Now()
 	return nil
 }
 
 // fetchJSON runs a fetch() from inside the already-loaded nseindia.com page
 // so the request carries the page's session cookies and headers exactly as
 // the site's own frontend would send them, then unmarshals the JSON body.
-func fetchJSON(url string, out any) error {
-	ctx, cancel := context.WithTimeout(browser(), navigationTimeout)
+func (b *Browser) fetchJSON(ctx context.Context, url string, out any) error {
+	runCtx, cancel := b.withDeadline(ctx, navigationTimeout)
 	defer cancel()
 
 	script := fmt.Sprintf(`fetch(%q, {headers: {"Accept": "application/json"}}).then(function(r) {
@@ -110,7 +121,7 @@ func fetchJSON(url string, out any) error {
 	})`, url)
 
 	var body string
-	err := chromedp.Run(ctx,
+	err := chromedp.Run(runCtx,
 		chromedp.Evaluate(script, &body, func(p *runtime.EvaluateParams) *runtime.EvaluateParams {
 			return p.WithAwaitPromise(true)
 		}),
@@ -127,9 +138,9 @@ func fetchJSON(url string, out any) error {
 	if err := json.Unmarshal([]byte(body), out); err != nil {
 		// A bot-check/redirect page comes back as HTML, not JSON. Force a
 		// cookie refresh on the next attempt rather than waiting out the TTL.
-		sessionMu.Lock()
-		cookiesAt = time.Time{}
-		sessionMu.Unlock()
+		b.mu.Lock()
+		b.cookiesAt = time.Time{}
+		b.mu.Unlock()
 
 		preview := body
 		if len(preview) > 200 {
@@ -141,8 +152,8 @@ func fetchJSON(url string, out any) error {
 	return nil
 }
 
-func getOptionChain() (models.OptionChain, error) {
-	if err := refreshSession(false); err != nil {
+func (b *Browser) getOptionChain(ctx context.Context) (models.OptionChain, error) {
+	if err := b.refreshSession(ctx, false); err != nil {
 		return models.OptionChain{}, fmt.Errorf("cookie setup failed: %w", err)
 	}
 
@@ -150,7 +161,7 @@ func getOptionChain() (models.OptionChain, error) {
 		ExpiryDates []string `json:"expiryDates"`
 	}
 	contractInfoURL := "https://www.nseindia.com/api/option-chain-contract-info?symbol=NIFTY&type=Indices"
-	if err := fetchJSON(contractInfoURL, &contractData); err != nil {
+	if err := b.fetchJSON(ctx, contractInfoURL, &contractData); err != nil {
 		return models.OptionChain{}, fmt.Errorf("failed to fetch contract info: %w", err)
 	}
 
@@ -171,7 +182,7 @@ func getOptionChain() (models.OptionChain, error) {
 		url := fmt.Sprintf("https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=%s", expiry)
 
 		var optionData models.OptionChain
-		if err := fetchJSON(url, &optionData); err != nil {
+		if err := b.fetchJSON(ctx, url, &optionData); err != nil {
 			return models.OptionChain{}, fmt.Errorf("failed to fetch data for expiry %s: %w", expiry, err)
 		}
 

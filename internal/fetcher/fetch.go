@@ -9,7 +9,8 @@ import (
 )
 
 type FetcherService struct {
-	Writer Writer
+	Writer  Writer
+	Browser *Browser
 }
 
 const (
@@ -90,7 +91,7 @@ func (fs *FetcherService) FetchData(ctx context.Context, logger *slog.Logger) er
 
 			for i := 0; i < maxRetries; i++ {
 				var optionChainError error
-				chain, optionChainError = getOptionChain()
+				chain, optionChainError = fs.Browser.getOptionChain(ctx)
 				if optionChainError != nil {
 					logger.Error("Failed to fetch option chain",
 						slog.Int("attempt", i+1),

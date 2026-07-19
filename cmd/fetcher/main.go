@@ -69,10 +69,14 @@ func main() {
 	}()
 
 	writer := fetcher.NewStreamWriter(redisClient, "nifty50:option_chain")
+
+	browser := fetcher.NewBrowser()
+	defer browser.Close()
+
 	fetcherService := &fetcher.FetcherService{
-		Writer: writer,
+		Writer:  writer,
+		Browser: browser,
 	}
-	defer fetcher.CloseBrowser()
 
 	if err := fetcherService.FetchData(ctx, logger); err != nil {
 		logger.Error("Failed to fetch data", slog.String("err", err.Error()))
