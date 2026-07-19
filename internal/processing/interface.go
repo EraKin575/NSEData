@@ -14,4 +14,6 @@ type DBWriter interface {
 	WriteToDB(ctx context.Context, records *[]models.ResponsePayload) error
 }
 
-
+type CSVUploader interface {
+	Upload(ctx context.Context, key string, data []byte) error
+}

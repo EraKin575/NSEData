@@ -2,7 +2,9 @@ package processing
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"server/internal/csvexport"
 	"server/internal/db"
 	"server/internal/models"
 	"strings"
@@ -13,6 +15,7 @@ import (
 type ProcessingService struct {
 	Reader   Reader
 	DBWriter DBWriter
+	Uploader CSVUploader
 }
 
 func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB, mu *sync.RWMutex, logger *slog.Logger, records *[]models.ResponsePayload) error {
@@ -66,6 +69,9 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 						logger.Error("Failed to write to database", slog.Any("error", err))
 						continue
 					}
+
+					r.uploadDailyCSV(ctx, mu, logger, records, now)
+
 					isWrittenToDB = true
 				}
 				continue
@@ -127,4 +133,27 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 			}
 		}
 	}
+}
+
+// uploadDailyCSV renders the day's records as CSV and uploads them to the configured bucket, if any.
+func (r *ProcessingService) uploadDailyCSV(ctx context.Context, mu *sync.RWMutex, logger *slog.Logger, records *[]models.ResponsePayload, now time.Time) {
+	if r.Uploader == nil {
+		return
+	}
+
+	mu.RLock()
+	csvData, err := csvexport.ToCSV(*records)
+	mu.RUnlock()
+	if err != nil {
+		logger.Error("Failed to generate daily CSV", slog.Any("error", err))
+		return
+	}
+
+	key := fmt.Sprintf("nifty50/%s.csv", now.Format("2006-01-02"))
+	if err := r.Uploader.Upload(ctx, key, csvData); err != nil {
+		logger.Error("Failed to upload daily CSV", slog.Any("error", err))
+		return
+	}
+
+	logger.Info("Uploaded daily CSV", slog.String("key", key))
 }

@@ -10,6 +10,7 @@ import (
 	"server/internal/db"
 	"server/internal/models"
 	"server/internal/processing"
+	"server/internal/storage"
 	"sync"
 	"time"
 
@@ -57,6 +58,22 @@ func initRedis(ctx context.Context, logger *slog.Logger) *goredis.Client {
 	}
 	logger.Info("Connected to Redis")
 	return client
+}
+
+func initBucketUploader(logger *slog.Logger) processing.CSVUploader {
+	endpoint := os.Getenv("BUCKET_ENDPOINT")
+	region := os.Getenv("BUCKET_REGION")
+	bucket := os.Getenv("BUCKET_NAME")
+	accessKeyID := os.Getenv("BUCKET_ACCESS_KEY_ID")
+	secretAccessKey := os.Getenv("BUCKET_SECRET_ACCESS_KEY")
+
+	if endpoint == "" || region == "" || bucket == "" || accessKeyID == "" || secretAccessKey == "" {
+		logger.Info("Bucket credentials not fully set, daily CSV upload disabled")
+		return nil
+	}
+
+	logger.Info("Daily CSV upload enabled", slog.String("bucket", bucket))
+	return storage.NewBucketUploader(endpoint, region, bucket, accessKeyID, secretAccessKey)
 }
 
 func main() {
@@ -120,6 +137,7 @@ func main() {
 	processingService := &processing.ProcessingService{
 		Reader:   reader,
 		DBWriter: db,
+		Uploader: initBucketUploader(logger),
 	}
 
 	mux.HandleFunc("/api/data", handlers.HandlePost(records, loc, mu, logger))
