@@ -14,7 +14,7 @@ func isMarketHoliday(date time.Time, loc *time.Location) bool {
 	return false
 }
 
-func extractResponsePayload(records models.Records) []models.ResponsePayload {
+func extractResponsePayload(records models.Records, loc *time.Location) []models.ResponsePayload {
 	var response []models.ResponsePayload
 	for _, record := range records.Data {
 		ceOI, ceChOI, ceVol, ceIV, ceLTP := 0.0, 0.0, 0, 0.0, 0.0
@@ -40,11 +40,11 @@ func extractResponsePayload(records models.Records) []models.ResponsePayload {
 		ceChOIPercentage := calculatePercentage(ceChOI, ceOI)
 		peChOIPercentage := calculatePercentage(peChOI, peOI)
 
-		timeStamp, err := time.Parse("02-Jan-2006 15:04:05", records.TimeStamp)
+		timeStamp, err := time.ParseInLocation("02-Jan-2006 15:04:05", records.TimeStamp, loc)
 		if err != nil {
 			timeStamp = time.Time{}
 		}
-		expiryDate, err := time.Parse("02-Jan-2006", record.ExpiryDate)
+		expiryDate, err := time.ParseInLocation("02-Jan-2006", record.ExpiryDate, loc)
 		if err != nil {
 			expiryDate = time.Time{}
 		}

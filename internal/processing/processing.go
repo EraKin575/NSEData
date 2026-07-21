@@ -123,7 +123,7 @@ func (r *ProcessingService) ProcessingOptionChain(ctx context.Context, db *db.DB
 			}
 
 			if newRecords.TimeStamp != "" {
-				responsePayload := extractResponsePayload(newRecords)
+				responsePayload := extractResponsePayload(newRecords, loc)
 				if len(responsePayload) > 0 {
 					mu.Lock()
 					*records = append(*records, responsePayload...)
